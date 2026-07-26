@@ -1,34 +1,56 @@
 /**
- * The paint sim: every blob in flight, everywhere paint lands.
+ * The paint sim: every ball in flight — yours and theirs — and everywhere
+ * paint lands.
  *
- * Balls live in flat typed-array slots (no per-ball entities — dual-wielded
- * volleys would churn the ECS) and render through the shared InstancedMesh
- * pool, slightly stretched along their velocity so they wobble like thrown
- * water balloons. Each frame a ball:
+ * Balls live in flat typed-array slots (no per-ball entities) and render
+ * through the shared InstancedMesh pool, slightly stretched along their
+ * velocity so they wobble like thrown water balloons. Each frame a ball:
  *  - arcs under paint-gravity;
- *  - tests the toy enemies — a hit adds coverage, bursts droplets and
- *    sticks a shade onto them (the coverage shader does the painting);
- *  - tests the floor — a landing stamps a pooled splat decal and plops;
- *  - is culled beyond the arena bounds or its lifetime.
+ *  - tests the swarm through its SPATIAL GRID, so we only check the handful
+ *    of enemies sharing a cell rather than all of them — this is what keeps
+ *    hundreds of enemies × dozens of balls affordable;
+ *  - on a hit, deals damage (scaled by your HEAVY PAINT stacks), pops a
+ *    damage number, and requests a splash blast if you have SPLASH;
+ *  - tests the upgrade cards while the board is up (you pick by shooting);
+ *  - tests the floor — a landing stamps a pooled splat decal and plops.
+ *
+ * Enemy return fire flies in the same loop with the same physics, but tests
+ * against your head instead of the swarm.
  */
 
 import { createSystem, Vector3 } from '@iwsdk/core';
-import { Enemy } from '../components/Enemy.js';
-import { pendingBlobs, recycleSpawn } from '../combat/paintBus.js';
-import { MAX_BLOBS, dropletBurst, initPaintPools, updatePaintPools, type BlobPool, type SplatPool } from '../fx/paint.js';
+import { EnemySystem } from './EnemySystem.js';
+import { UpgradeSystem } from './UpgradeSystem.js';
+import {
+  pendingBlobs,
+  pendingEnemyShots,
+  recycleSpawn,
+  requestBlast,
+} from '../combat/paintBus.js';
+import {
+  MAX_BLOBS,
+  dropletBurst,
+  initPaintPools,
+  updatePaintPools,
+  type BlobPool,
+  type SplatPool,
+} from '../fx/paint.js';
+import { initDamageNumbers, popDamage, updateDamageNumbers } from '../fx/damageNumbers.js';
+import { ballDamage, damagePlayer, run, UpgradeId } from '../game/run.js';
 import * as sfx from '../audio/sfx.js';
-import { ARENA_BOUNDS, PISTOL } from '../config.js';
+import { AOE, ARENA_BOUNDS, ENEMY_SHOT, PISTOL } from '../config.js';
+import { Quaternion } from 'three';
 
 const _pos = new Vector3();
 const _vel = new Vector3();
-const _enemyPos = new Vector3();
+const _head = new Vector3();
+const _camQ = new Quaternion();
+const _near: number[] = [];
 
-export class PaintSystem extends createSystem({
-  enemies: { required: [Enemy] },
-}) {
+export class PaintSystem extends createSystem({}) {
   private blobs!: BlobPool;
   private splats!: SplatPool;
-  // Structure-of-arrays blob state.
+  // Structure-of-arrays ball state.
   private px = new Float32Array(MAX_BLOBS);
   private py = new Float32Array(MAX_BLOBS);
   private pz = new Float32Array(MAX_BLOBS);
@@ -37,6 +59,8 @@ export class PaintSystem extends createSystem({
   private vz = new Float32Array(MAX_BLOBS);
   private age = new Float32Array(MAX_BLOBS);
   private alive = new Uint8Array(MAX_BLOBS);
+  /** 1 = enemy return fire (hurts you), 0 = yours (hurts them). */
+  private hostile = new Uint8Array(MAX_BLOBS);
   private cursor = 0;
   private splatSfxAcc = 0;
 
@@ -44,64 +68,93 @@ export class PaintSystem extends createSystem({
     const pools = initPaintPools(this.world.scene);
     this.blobs = pools.blobs;
     this.splats = pools.splats;
+    initDamageNumbers(this.world.scene);
   }
 
   update(delta: number): void {
     this.splatSfxAcc = Math.max(0, this.splatSfxAcc - delta);
+    const enemies = this.world.getSystem(EnemySystem);
+    const upgrades = this.world.getSystem(UpgradeSystem);
+    const swarm = enemies?.swarm;
 
-    // Claim freshly-squirted blobs from the weapon.
-    for (const s of pendingBlobs.splice(0)) {
-      const i = this.cursor;
-      this.cursor = (this.cursor + 1) % MAX_BLOBS;
-      this.px[i] = s.pos.x; this.py[i] = s.pos.y; this.pz[i] = s.pos.z;
-      this.vx[i] = s.vel.x; this.vy[i] = s.vel.y; this.vz[i] = s.vel.z;
-      this.age[i] = 0;
-      this.alive[i] = 1;
-      recycleSpawn(s);
-    }
+    this.world.camera.getWorldPosition(_head);
+    this.world.camera.getWorldQuaternion(_camQ);
 
-    const enemies = [...this.queries.enemies.entities];
+    // Claim freshly-fired balls from both sides.
+    for (const s of pendingBlobs.splice(0)) this.claim(s.pos, s.vel, 0), recycleSpawn(s);
+    for (const s of pendingEnemyShots.splice(0)) this.claim(s.pos, s.vel, 1), recycleSpawn(s);
+
+    const splashStacks = run.stacks[UpgradeId.Splash];
+    const damage = ballDamage();
 
     for (let i = 0; i < MAX_BLOBS; i++) {
       if (!this.alive[i]) continue;
 
-      this.vy[i] -= PISTOL.gravity * delta;
+      const hostile = this.hostile[i] === 1;
+      const gravity = hostile ? ENEMY_SHOT.gravity : PISTOL.gravity;
+      const radius = hostile ? ENEMY_SHOT.radius : PISTOL.blobRadius;
+
+      this.vy[i] -= gravity * delta;
       this.px[i] += this.vx[i] * delta;
       this.py[i] += this.vy[i] * delta;
       this.pz[i] += this.vz[i] * delta;
       this.age[i] += delta;
 
       _pos.set(this.px[i], this.py[i], this.pz[i]);
-
-      // --- Enemy hits: paint the toy. ---
       let hit = false;
-      for (const e of enemies) {
-        const obj = e.object3D;
-        if (!obj) continue;
-        obj.getWorldPosition(_enemyPos);
-        const r = (e.getValue(Enemy, 'radius') ?? 0.2) + PISTOL.blobRadius;
-        if (_pos.distanceToSquared(_enemyPos) <= r * r) {
-          const soak = e.getValue(Enemy, 'soak') ?? 1;
-          const coverage = Math.min(1, (e.getValue(Enemy, 'coverage') ?? 0) + PISTOL.coverPerHit / soak);
-          e.setValue(Enemy, 'coverage', coverage);
-          dropletBurst(_pos, 9, 0.9);
-          if (this.splatSfxAcc <= 0) {
-            sfx.hitSplat();
-            this.splatSfxAcc = 0.09;
-          }
+
+      if (hostile) {
+        // --- Their paint vs your head. ---
+        if (_pos.distanceToSquared(_head) <= ENEMY_SHOT.hitRadius * ENEMY_SHOT.hitRadius) {
+          dropletBurst(_pos, 10, 1.1);
+          if (damagePlayer(9)) sfx.playerDown();
+          else sfx.playerHurt();
           hit = true;
-          break;
         }
+      } else {
+        // --- Your paint vs the swarm, via the grid. ---
+        if (swarm) {
+          swarm.near(this.px[i], this.pz[i], radius + 0.5, _near);
+          for (let n = 0; n < _near.length; n++) {
+            const j = _near[n];
+            if (!swarm.alive[j]) continue;
+            const dx = swarm.px[j] - this.px[i];
+            const dy = swarm.py[j] - this.py[i];
+            const dz = swarm.pz[j] - this.pz[i];
+            const r = swarm.radius[j] + radius;
+            if (dx * dx + dy * dy + dz * dz <= r * r) {
+              enemies!.hit(j, damage);
+              dropletBurst(_pos, 8, 0.9);
+              if (splashStacks > 0) {
+                requestBlast(
+                  _pos,
+                  AOE.splashRadius + AOE.splashRadiusPerStack * (splashStacks - 1),
+                  damage * AOE.splashFraction,
+                  false,
+                );
+              }
+              if (this.splatSfxAcc <= 0) {
+                sfx.hitSplat();
+                this.splatSfxAcc = 0.06;
+              }
+              hit = true;
+              break;
+            }
+          }
+        }
+
+        // --- Your paint vs the upgrade cards (shoot to pick). ---
+        if (!hit && upgrades?.isActive && upgrades.testHit(_pos, radius)) hit = true;
       }
 
       // --- Floor landing: stamp the splat. ---
-      if (!hit && this.py[i] <= PISTOL.blobRadius) {
+      if (!hit && this.py[i] <= radius) {
         _pos.y = 0;
-        this.splats.stamp(_pos, 0.14 + Math.random() * 0.1);
-        dropletBurst(_pos, 6, 0.7);
+        this.splats.stamp(_pos, (hostile ? 0.1 : 0.18) + Math.random() * 0.1);
+        dropletBurst(_pos, hostile ? 4 : 7, 0.7);
         if (this.splatSfxAcc <= 0) {
           sfx.splat();
-          this.splatSfxAcc = 0.12;
+          this.splatSfxAcc = 0.1;
         }
         hit = true;
       }
@@ -109,7 +162,7 @@ export class PaintSystem extends createSystem({
       // --- Cull: lifetime and the invisible cage. ---
       if (
         hit ||
-        this.age[i] >= PISTOL.lifetime ||
+        this.age[i] >= (hostile ? ENEMY_SHOT.lifetime : PISTOL.lifetime) ||
         this.py[i] > ARENA_BOUNDS.ceiling ||
         this.px[i] * this.px[i] + this.pz[i] * this.pz[i] > ARENA_BOUNDS.radius * ARENA_BOUNDS.radius
       ) {
@@ -119,10 +172,22 @@ export class PaintSystem extends createSystem({
       }
 
       _vel.set(this.vx[i], this.vy[i], this.vz[i]);
-      this.blobs.place(i, _pos, _vel);
+      this.blobs.place(i, _pos, _vel, hostile);
     }
 
     this.blobs.commit();
     updatePaintPools(delta);
+    updateDamageNumbers(delta, _camQ);
+    void popDamage;
+  }
+
+  private claim(pos: Vector3, vel: Vector3, hostile: 0 | 1): void {
+    const i = this.cursor;
+    this.cursor = (this.cursor + 1) % MAX_BLOBS;
+    this.px[i] = pos.x; this.py[i] = pos.y; this.pz[i] = pos.z;
+    this.vx[i] = vel.x; this.vy[i] = vel.y; this.vz[i] = vel.z;
+    this.age[i] = 0;
+    this.alive[i] = 1;
+    this.hostile[i] = hostile;
   }
 }

@@ -195,6 +195,43 @@ export function gunBurst(): void {
   noiseBurst(800, 0.9, 0.45, 0.32, 220);
 }
 
+/** An enemy lobbing paint at you — a hollow, sinister underarm whoop. */
+export function enemyLob(): void {
+  blip(300, 620, 0.16, 0.1, 'sine');
+  noiseBurst(700, 1.2, 0.18, 0.07, 1400);
+}
+
+/** You getting splatted — a dull wet thud right on the ears. */
+export function playerHurt(): void {
+  noiseBurst(320, 0.7, 0.28, 0.3, 120);
+  blip(150, 70, 0.16, 0.22, 'sine');
+}
+
+/** You going down — the whole thing deflating. */
+export function playerDown(): void {
+  blip(420, 60, 0.9, 0.34, 'sawtooth');
+  noiseBurst(500, 0.6, 1.0, 0.22, 90);
+}
+
+/** A Paint Bomb going off — a big low whump with a wet tail. */
+export function paintBomb(): void {
+  blip(150, 40, 0.5, 0.42, 'square');
+  noiseBurst(500, 0.6, 0.8, 0.4, 120);
+}
+
+/** The upgrade board swinging up. */
+export function upgradeAppear(): void {
+  blip(440, 660, 0.18, 0.16, 'triangle');
+  setTimeout(() => blip(660, 880, 0.22, 0.16, 'triangle'), 130);
+}
+
+/** An upgrade taken — a bright confirming chime. */
+export function upgradePick(): void {
+  blip(660, 990, 0.16, 0.24, 'triangle');
+  setTimeout(() => blip(990, 1320, 0.3, 0.22, 'triangle'), 120);
+  noiseBurst(900, 0.8, 0.5, 0.1, 2000);
+}
+
 /** A new wave rolling in — bright toy fanfare over a water swell. */
 export function waveHorn(): void {
   blip(523, 523, 0.16, 0.2, 'triangle');

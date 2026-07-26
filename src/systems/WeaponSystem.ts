@@ -24,13 +24,14 @@
 
 import { createSystem, InputComponent, Quaternion, Vector3, type Entity } from '@iwsdk/core';
 import { PistolState, WaterPistol } from '../components/WaterPistol.js';
-import { Enemy } from '../components/Enemy.js';
+import { EnemySystem } from './EnemySystem.js';
 import { createWaterPistol, type WaterPistolRig } from '../weapons/waterPistol.js';
-import { squirtBlob } from '../combat/paintBus.js';
+import { requestBlast, squirtBlob } from '../combat/paintBus.js';
 import { dropletBurst, stampSplat } from '../fx/paint.js';
 import { pulseHand } from '../input/haptics.js';
+import { run, UpgradeId } from '../game/run.js';
 import * as sfx from '../audio/sfx.js';
-import { HOLSTER, PISTOL } from '../config.js';
+import { AOE, HOLSTER, PISTOL } from '../config.js';
 
 const HANDS = ['left', 'right'] as const;
 type Hand = 0 | 1;
@@ -51,8 +52,8 @@ const _quat = new Quaternion();
 const _head = new Vector3();
 const _anchor = new Vector3();
 const _gripPos = new Vector3();
-const _enemyPos = new Vector3();
-const _e = new Vector3(); // scratch euler-ish forward
+const _e = new Vector3(); // scratch forward/ground vector
+const _near: number[] = [];
 
 /** Per-hand world-space motion tracking for slosh + throw velocity. */
 class HandMotion {
@@ -90,7 +91,6 @@ class ThrowState {
 
 export class WeaponSystem extends createSystem({
   pistols: { required: [WaterPistol] },
-  enemies: { required: [Enemy] },
 }) {
   private rigs = new Map<Entity, WaterPistolRig>();
   private motion: [HandMotion, HandMotion] = [new HandMotion(), new HandMotion()];
@@ -140,7 +140,9 @@ export class WeaponSystem extends createSystem({
             if (_gripPos.distanceTo(rig.group.position) <= HOLSTER.drawRadius) {
               grip.add(rig.group);
               rig.group.position.set(0, 0, 0);
-              rig.group.quaternion.identity();
+              // Tip the barrel down out of the grip's nose-up handle axis so
+              // the gun aims where your hand feels like it's aiming.
+              rig.group.quaternion.setFromAxisAngle(_e.set(1, 0, 0), HOLSTER.heldPitch);
               e.setValue(WaterPistol, 'state', PistolState.Held);
               sfx.draw();
               pulseHand(this.world.session, HANDS[hand], 0.5, 50);
@@ -294,19 +296,24 @@ export class WeaponSystem extends createSystem({
   private checkThrowImpact(e: Entity, rig: WaterPistolRig): boolean {
     const pos = rig.group.position;
     const ammo = e.getValue(WaterPistol, 'ammo') ?? 0;
+    const enemies = this.world.getSystem(EnemySystem);
+    const swarm = enemies?.swarm;
 
-    // Enemies first — a direct hit dumps the whole remaining tank.
-    for (const enemy of this.queries.enemies.entities) {
-      const obj = enemy.object3D;
-      if (!obj) continue;
-      obj.getWorldPosition(_enemyPos);
-      const r = (enemy.getValue(Enemy, 'radius') ?? 0.2) + HOLSTER.hitRadius;
-      if (pos.distanceToSquared(_enemyPos) <= r * r) {
-        const soak = enemy.getValue(Enemy, 'soak') ?? 1;
-        const dumped = (HOLSTER.hitCoverBase + HOLSTER.hitCoverAmmo * ammo) / soak;
-        enemy.setValue(Enemy, 'coverage', Math.min(1, (enemy.getValue(Enemy, 'coverage') ?? 0) + dumped));
-        this.burst(e, rig, pos, ammo, 1.6);
-        return true;
+    // Enemies first — a direct hit dumps the whole remaining tank on them.
+    if (swarm) {
+      swarm.near(pos.x, pos.z, HOLSTER.hitRadius + 0.6, _near);
+      for (let n = 0; n < _near.length; n++) {
+        const j = _near[n];
+        if (!swarm.alive[j]) continue;
+        const dx = swarm.px[j] - pos.x;
+        const dy = swarm.py[j] - pos.y;
+        const dz = swarm.pz[j] - pos.z;
+        const r = swarm.radius[j] + HOLSTER.hitRadius;
+        if (dx * dx + dy * dy + dz * dz <= r * r) {
+          enemies!.hit(j, HOLSTER.throwDamage * (0.5 + ammo), true);
+          this.burst(e, rig, pos, ammo, 1.6);
+          return true;
+        }
       }
     }
 
@@ -322,6 +329,17 @@ export class WeaponSystem extends createSystem({
 
   /** The gun disappears in a paint burst; a fresh one is due on the hip. */
   private burst(e: Entity, rig: WaterPistolRig, pos: Vector3, ammo: number, punch: number): void {
+    // PAINT BOMB: with the upgrade, a thrown gun detonates in a wave of
+    // paint that guts whatever is packed around it.
+    const blastStacks = run.stacks[UpgradeId.ThrowBlast];
+    if (blastStacks > 0) {
+      const radius = AOE.throwRadius + AOE.throwRadiusPerStack * (blastStacks - 1);
+      const damage = (AOE.throwDamage + AOE.throwDamagePerStack * (blastStacks - 1)) * (0.6 + ammo * 0.4);
+      requestBlast(pos, radius, damage, true);
+      dropletBurst(pos, 44, 2.4);
+      stampSplat(_e.set(pos.x, 0, pos.z), radius * 0.9);
+      sfx.paintBomb();
+    }
     dropletBurst(pos, Math.round(14 + ammo * 22), punch);
     sfx.gunBurst();
     rig.group.visible = false;

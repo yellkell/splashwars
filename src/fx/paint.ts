@@ -32,7 +32,7 @@ import {
   type Scene,
 } from 'three';
 import { glossyPlastic } from '../materials/plastic.js';
-import { PALETTE, PISTOL } from '../config.js';
+import { ENEMY_SHOT, PALETTE, PISTOL } from '../config.js';
 
 const _m = new Matrix4();
 const _q = new Quaternion();
@@ -59,6 +59,12 @@ export class BlobPool {
     this.mesh.instanceMatrix.setUsage(DynamicDrawUsage);
     this.mesh.frustumCulled = false;
     this.mesh.count = MAX_BLOBS;
+    // Enemy fire is tinted per instance so incoming paint reads instantly
+    // as theirs, not yours.
+    for (let i = 0; i < MAX_BLOBS; i++) {
+      _c.set(PALETTE.paint);
+      this.mesh.setColorAt(i, _c);
+    }
     // Park everything at zero scale until a blob claims the slot.
     _m.makeScale(0, 0, 0);
     for (let i = 0; i < MAX_BLOBS; i++) this.mesh.setMatrixAt(i, _m);
@@ -66,16 +72,21 @@ export class BlobPool {
 
   /**
    * Place slot `i` at `pos`, slightly stretched along `vel` — enough wobble
-   * to read as liquid, not so much that a tennis ball becomes a rope.
+   * to read as liquid, not so much that a fat ball becomes a rope.
    */
-  place(i: number, pos: Vector3, vel: Vector3): void {
+  place(i: number, pos: Vector3, vel: Vector3, hostile = false): void {
     const speed = vel.length();
     const stretch = 1 + Math.min(0.45, speed * 0.06);
     _dir.copy(vel).normalize();
     _q.setFromUnitVectors(_zAxis, _dir);
-    _s.set(1 / Math.sqrt(stretch), 1 / Math.sqrt(stretch), stretch);
+    // Enemy shots are a bit smaller than your fat rounds.
+    const size = hostile ? ENEMY_SHOT.radius / PISTOL.blobRadius : 1;
+    _s.set(size / Math.sqrt(stretch), size / Math.sqrt(stretch), size * stretch);
     _m.compose(pos, _q, _s);
     this.mesh.setMatrixAt(i, _m);
+    _c.set(hostile ? ENEMY_SHOT.tint : PALETTE.paint);
+    this.mesh.setColorAt(i, _c);
+    if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
   }
 
   hide(i: number): void {

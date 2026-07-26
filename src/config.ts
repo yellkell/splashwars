@@ -36,27 +36,28 @@ export const PLATFORM = {
  *  - Let go and the pump gurgles the tank full again.
  */
 export const PISTOL = {
-  // Tank + ammo. `capacity` is seconds of continuous fire in a full tank.
-  capacity: 6.5,
-  refillDelay: 0.9, // seconds after the last shot before refill starts
-  refillRate: 0.28, // tank fraction per second (empty → full in ~3.6 s)
+  // Tank + ammo. `capacity` is seconds of continuous fire in a full tank —
+  // deliberately short: you burn a tank FAST, so the drain is always visible
+  // in the glass and the refill rhythm is part of the fight.
+  capacity: 2.6,
+  refillDelay: 0.55, // seconds after the last shot before refill starts
+  refillRate: 0.75, // tank fraction per second (empty → full in ~1.3 s)
 
-  // The balls. Tennis-ball-sized paint orbs, Blaston-slow: MUCH slower than
-  // real projectiles but quick enough that you'd have to dodge one — this is
-  // the game's shared projectile language, so when enemies and bosses shoot
-  // back later their fire is readable and dodgeable the same way.
-  fireRate: 9, // balls per second at a full trigger pull
-  muzzleSpeed: 4.6, // launch speed (m/s) — watchable in flight, dodge-or-else
+  // The balls. Chunky paint orbs, Blaston-slow: MUCH slower than real
+  // projectiles but quick enough that you'd have to dodge one — this is the
+  // game's shared projectile language, so enemy return fire reads the same.
+  fireRate: 4.5, // balls per second at a full trigger pull — few and fat
+  muzzleSpeed: 7.2, // launch speed (m/s) — snappier, still readable in flight
   inheritVel: 0.55, // fraction of hand velocity added to the launch
-  spread: 0.02, // radians of random cone spread — a lob, not a laser
-  blobRadius: 0.034, // collision + visual radius — a tennis ball (Ø ~6.8 cm)
-  gravity: 2.4, // gentle arc so slow balls still reach the spawn ring
+  spread: 0.018, // radians of random cone spread — a lob, not a laser
+  blobRadius: 0.052, // collision + visual radius — a big fat cricket ball
+  gravity: 2.0, // gentle arc so the balls still reach the spawn ring
   lifetime: 3.0, // seconds of flight before a ball is culled
-  coverPerHit: 0.32, // enemy coverage per landed ball — 3-4 clean hits pops
+  damage: 34, // damage per landed ball (see ENEMY_TYPES for HP pools)
 
   // Feel.
   hapticEvery: 1, // a chunky ball deserves a thump per shot
-  sputterShots: 4, // weak dribble shots fired as the tank hits empty
+  sputterShots: 3, // weak dribble shots fired as the tank hits empty
 
   // The slosh sim — a damped 2D pendulum tilting the liquid surface plane.
   slosh: {
@@ -77,6 +78,14 @@ export const PISTOL = {
  * an enemy dumps the whole tank's paint on it at once.
  */
 export const HOLSTER = {
+  /**
+   * Pitch applied to a HELD pistol, radians. The XR grip space's -Z runs
+   * along the controller handle, which sits nose-up when you hold a
+   * controller naturally — so a gun parented raw to the grip aims above
+   * where you think you're pointing. Negative tips the barrel back down to
+   * where your hand feels like it's aiming.
+   */
+  heldPitch: -0.32,
   lateral: 0.24, // hip offset left/right of the head, metres
   height: 0.96, // holster height above the floor
   forward: 0.03, // nudged forward so it's visible in your periphery
@@ -87,9 +96,9 @@ export const HOLSTER = {
   throwGravity: 5.5, // guns are heavier than paint balls
   throwSpin: 9, // rad/s tumble in flight — the tank sloshes wildly
   hitRadius: 0.14, // the gun's collision radius vs enemies
-  // Coverage a thrown gun dumps on an enemy: base + remaining tank * gain.
-  hitCoverBase: 0.4,
-  hitCoverAmmo: 0.55,
+  // Damage a direct hit deals, scaled by how full the thrown tank was — a
+  // brimming pistol to the face is a serious opener.
+  throwDamage: 220,
 };
 
 /** Where paint may fly: a generous invisible cage around the arena. */
@@ -99,32 +108,171 @@ export const ARENA_BOUNDS = {
 };
 
 /**
- * Wave survival, vampire-survivors pacing: each wave spawns a bigger, faster
- * squad of toy enemies that bob in toward the deck. Coverage is their health
- * bar — paint one fully and it pops. Wave 10 is the boss: one huge toy that
- * soaks a whole tank. (Per-run upgrades slot in here later.)
+ * Wave survival, vampire-survivors pacing. Waves escalate hard in COUNT, not
+ * just in stats — by the late waves the deck is ringed by a swarm, which the
+ * instanced renderer (enemies/swarm.ts) is built to eat. Between every wave
+ * you pick one of three upgrades. Wave 10 is the boss.
  */
 export const WAVES = {
   count: 10, // waves per loop; the last one is the boss
-  baseEnemies: 3, // wave 1 squad size
-  enemiesPerWave: 2, // extra enemies per wave after the first
-  baseSpeed: 0.32, // m/s drift toward the deck on wave 1
-  speedPerWave: 0.045, // extra m/s per wave
-  spawnRadius: [6.5, 9] as [number, number], // ring the squad appears on
-  spawnStagger: 1.1, // seconds between squad member entrances
-  standoffRadius: 1.6, // enemies hold this far from the deck centre
-  interWaveDelay: 3.5, // breather between waves
-  bossCoverageSoak: 7, // boss needs this many enemies' worth of paint
-  bossScale: 2.6, // boss body scale multiplier
+  baseEnemies: 6, // wave 1 squad size
+  enemiesPerWave: 5, // extra enemies per wave (compounding — see growth)
+  growth: 1.35, // squad size multiplier per wave — this is the swarm curve
+  baseSpeed: 0.34, // m/s drift toward the deck on wave 1
+  speedPerWave: 0.04, // extra m/s per wave
+  hpPerWave: 0.18, // fractional HP bump per wave
+  spawnRadius: [6.0, 9.5] as [number, number], // ring the squad appears on
+  spawnRate: 14, // enemies released per second while a wave pours in
+  standoffRadius: 1.35, // enemies press to this radius, then attack
+  interWaveDelay: 2.0, // breather before the upgrade board appears
+  bossScale: 2.8, // boss body scale multiplier
 };
 
-/** One toy enemy: a glossy bobbing plastic blob with eyes. */
+/** Shared enemy shape constants. */
 export const ENEMY = {
-  bodyRadius: 0.21, // base body radius (waves scale slightly)
-  bobAmplitude: 0.08, // idle vertical bob
+  bobAmplitude: 0.07, // idle vertical bob
   bobRate: 1.7, // bobs per second-ish (each enemy gets its own phase)
   hoverHeight: 1.05, // body centre height above the floor
-  popDroplets: 26, // droplet burst size when one pops
+  popDroplets: 14, // droplet burst size when one pops
+  separation: 0.55, // crowd push-apart strength so the swarm doesn't stack
+};
+
+/**
+ * The roster. Every type is the same instanced blob shape with different
+ * numbers and a different shell tint, so a thousand of them still cost one
+ * draw call — the variety is in behaviour, size and threat.
+ *
+ * `attack` is damage dealt to YOU: chargers/brutes on contact at the deck
+ * rim, lobbers by throwing a paint ball at you from range.
+ */
+export const EnemyKind = {
+  Drifter: 0, // the baseline toy: slow, soft, arrives in crowds
+  Scurrier: 1, // small, quick, low HP — swarms and nips at you
+  Lobber: 2, // holds at range and throws paint at you — the real threat
+  Brute: 3, // big, slow, tanky, hits hard
+  Splitter: 4, // pops into a spray of scurriers
+  Boss: 5, // the wave-10 monster
+} as const;
+export type EnemyKindId = (typeof EnemyKind)[keyof typeof EnemyKind];
+
+export interface EnemyTypeDef {
+  name: string;
+  radius: number;
+  hp: number;
+  speed: number; // multiplier on the wave's base speed
+  tint: number; // unpainted shell colour
+  attack: number; // damage per hit on the player
+  attackInterval: number; // seconds between its attacks
+  ranged: boolean; // true = throws at you instead of touching you
+  splitInto?: EnemyKindId; // what it becomes when killed
+  splitCount?: number;
+  score: number;
+}
+
+export const ENEMY_TYPES: Record<EnemyKindId, EnemyTypeDef> = {
+  [EnemyKind.Drifter]: {
+    name: 'Drifter', radius: 0.19, hp: 100, speed: 1, tint: 0xe8f6f8,
+    attack: 3, attackInterval: 2.0, ranged: false, score: 10,
+  },
+  [EnemyKind.Scurrier]: {
+    name: 'Scurrier', radius: 0.12, hp: 45, speed: 2.05, tint: 0xffe07a,
+    attack: 2, attackInterval: 1.5, ranged: false, score: 15,
+  },
+  [EnemyKind.Lobber]: {
+    name: 'Lobber', radius: 0.22, hp: 130, speed: 0.72, tint: 0xb9a8ff,
+    attack: 5, attackInterval: 3.0, ranged: true, score: 25,
+  },
+  [EnemyKind.Brute]: {
+    name: 'Brute', radius: 0.36, hp: 420, speed: 0.5, tint: 0x8fd6a8,
+    attack: 9, attackInterval: 2.2, ranged: false, score: 50,
+  },
+  [EnemyKind.Splitter]: {
+    name: 'Splitter', radius: 0.26, hp: 170, speed: 0.85, tint: 0xffa9c9,
+    attack: 4, attackInterval: 2.0, ranged: false,
+    splitInto: EnemyKind.Scurrier, splitCount: 4, score: 30,
+  },
+  [EnemyKind.Boss]: {
+    name: 'BIG ONE', radius: 0.75, hp: 6000, speed: 0.34, tint: 0xff8f6b,
+    attack: 12, attackInterval: 2.0, ranged: true, score: 500,
+  },
+};
+
+/**
+ * Which types show up when. Each wave draws from its unlocked pool, so the
+ * fight gets more varied as well as bigger.
+ */
+export const WAVE_ROSTER: EnemyKindId[][] = [
+  [EnemyKind.Drifter], // 1
+  [EnemyKind.Drifter, EnemyKind.Scurrier], // 2
+  [EnemyKind.Drifter, EnemyKind.Scurrier, EnemyKind.Lobber], // 3
+  [EnemyKind.Drifter, EnemyKind.Scurrier, EnemyKind.Lobber], // 4
+  [EnemyKind.Drifter, EnemyKind.Scurrier, EnemyKind.Splitter, EnemyKind.Lobber], // 5
+  [EnemyKind.Scurrier, EnemyKind.Splitter, EnemyKind.Lobber, EnemyKind.Brute], // 6
+  [EnemyKind.Drifter, EnemyKind.Scurrier, EnemyKind.Lobber, EnemyKind.Brute], // 7
+  [EnemyKind.Scurrier, EnemyKind.Splitter, EnemyKind.Brute, EnemyKind.Lobber], // 8
+  [EnemyKind.Scurrier, EnemyKind.Splitter, EnemyKind.Brute, EnemyKind.Lobber], // 9
+  [EnemyKind.Boss], // 10 — plus a trickle of adds
+];
+
+/** You. Paint splashed on your visor is the damage read; it fades as you heal. */
+export const PLAYER = {
+  maxHealth: 100,
+  regenDelay: 4, // seconds without a hit before you start recovering
+  regenPerSec: 5,
+  hurtFlash: 0.5, // seconds the visor splat lingers at full strength
+  deathRespawnDelay: 4, // seconds down before the run restarts
+  /**
+   * Invulnerability after any hit. Without this a crowd all landing on the
+   * same frame deletes you instantly — every enemy in reach resolves its
+   * attack independently, so ten of them is ten simultaneous hits. This is
+   * what keeps a swarm a threat rather than a coin flip.
+   */
+  invulnerable: 0.6,
+};
+
+/** Enemy return fire — the same slow, dodgeable ball language as yours. */
+export const ENEMY_SHOT = {
+  speed: 4.2,
+  gravity: 2.4,
+  radius: 0.075,
+  lifetime: 4,
+  hitRadius: 0.34, // how close to your head counts as a hit
+  tint: 0x7b5cff,
+};
+
+/**
+ * Upgrades — between every wave you're offered three at random and you PICK
+ * BY SHOOTING the one you want (no menus in VR: paint the card you want).
+ * Each can stack; `max` caps the stack.
+ */
+export const UPGRADES = {
+  cardWidth: 0.46,
+  cardHeight: 0.6,
+  cardGap: 0.13,
+  cardDistance: 1.9, // metres in front of you
+  cardHeightY: 1.45,
+  paintToPick: 0.55, // fraction of a card you must cover to choose it
+};
+
+/** Orbital paint globes — the vampire-survivors passive. */
+export const ORBITALS = {
+  radius: 0.85, // orbit radius around you
+  height: 1.05,
+  speed: 1.9, // rad/s
+  globeRadius: 0.11,
+  damage: 26, // damage per tick to anything it touches
+  tickInterval: 0.45, // per-enemy damage cooldown
+};
+
+/** Splash + explosion tuning for the AOE upgrades. */
+export const AOE = {
+  splashRadius: 0.55, // paint-ball splash radius at stack 1
+  splashRadiusPerStack: 0.22,
+  splashFraction: 0.45, // fraction of direct damage dealt in the splash
+  throwRadius: 1.1, // thrown-pistol explosion radius at stack 0
+  throwRadiusPerStack: 0.5,
+  throwDamage: 120, // thrown-pistol explosion damage at stack 0
+  throwDamagePerStack: 110,
 };
 
 /**

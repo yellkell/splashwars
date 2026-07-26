@@ -24,19 +24,26 @@ export function mattePlastic(color: ColorRepresentation): MeshStandardMaterial {
 }
 
 /**
- * The clear tank shell: see-through blow-moulded plastic. No physical
- * transmission (too heavy in stereo WebXR) — a low-opacity glossy shell over
- * the liquid mesh inside sells it fine.
+ * The tank shell: FROSTED blow-moulded plastic, the Valve trick. A dead-clear
+ * shell shows every seam of the liquid mesh and reads as an empty glass box;
+ * frosting it — rough base under a glossy clearcoat, milky white, a bit more
+ * opacity — scatters the surface just enough to sell "there is real liquid in
+ * here" while still letting the paint level read at a glance.
+ *
+ * No physical transmission (far too heavy in stereo WebXR) — the frost plus
+ * the opaque liquid inside does the whole job.
  */
-export function clearPlastic(tint: ColorRepresentation = 0xdff6ff): MeshPhysicalMaterial {
+export function clearPlastic(tint: ColorRepresentation = 0xeaf7ff): MeshPhysicalMaterial {
   return new MeshPhysicalMaterial({
     color: tint,
-    roughness: 0.08,
+    // Rough base = the frost. The clearcoat on top keeps the wet, moulded
+    // sheen so it still reads as plastic rather than chalk.
+    roughness: 0.55,
     metalness: 0,
     clearcoat: 1,
-    clearcoatRoughness: 0.06,
+    clearcoatRoughness: 0.22,
     transparent: true,
-    opacity: 0.22,
+    opacity: 0.34,
     depthWrite: false,
   });
 }

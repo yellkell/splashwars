@@ -122,7 +122,9 @@ const LIQUID_FRAG = /* glsl */ `
     // Cheap view-independent rim gloss (a real fresnel needs cameraPosition;
     // this stays stable in stereo and costs nothing).
     float gloss = pow(1.0 - abs(vWorldNormal.y), 3.0) * 0.18;
-    gl_FragColor = vec4(col + gloss, 0.96);
+    // FULLY OPAQUE: thick paint is not see-through. Anything less and you
+    // catch the tank's far wall (and the room) straight through the liquid.
+    gl_FragColor = vec4(col + gloss, 1.0);
   }
 `;
 
@@ -160,12 +162,15 @@ export function createLiquid(
     },
     vertexShader: LIQUID_VERT,
     fragmentShader: LIQUID_FRAG,
-    transparent: true,
+    // Opaque: it renders in the opaque pass, writes depth, and the frosted
+    // shell then blends over the top of it in the transparent pass — which
+    // is exactly the sort order the illusion needs.
+    transparent: false,
     side: DoubleSide,
   });
 
   const mesh = new Mesh(interiorGeo, material);
-  mesh.renderOrder = 1; // before the clear tank shell blends over it
+  mesh.renderOrder = 1; // before the frosted tank shell blends over it
   const slosh = new SloshSim();
 
   return {

@@ -1,8 +1,8 @@
 /**
- * A tiny module bus between the weapon and the paint sim (the same pattern
- * as FIRE FIGHT's opponentBus): WeaponSystem pushes freshly-squirted blobs,
- * PaintSystem drains them into its pooled simulation each frame. Keeps the
- * two systems decoupled and the spawn path allocation-free at steady state.
+ * A tiny module bus between the combat systems (the same pattern as FIRE
+ * FIGHT's opponentBus): producers push events, consumers drain them each
+ * frame. Keeps WeaponSystem, PaintSystem and EnemySystem decoupled and the
+ * spawn paths allocation-free at steady state.
  */
 
 import { Vector3 } from 'three';
@@ -12,12 +12,12 @@ export interface BlobSpawn {
   vel: Vector3;
 }
 
-/** Blobs squirted this frame, waiting for the paint sim to claim them. */
+/** Player paint balls squirted this frame, awaiting the paint sim. */
 export const pendingBlobs: BlobSpawn[] = [];
 
 const spare: BlobSpawn[] = [];
 
-/** Queue a blob (recycles spawn records). */
+/** Queue a paint ball (recycles spawn records). */
 export function squirtBlob(pos: Vector3, vel: Vector3): void {
   const s = spare.pop() ?? { pos: new Vector3(), vel: new Vector3() };
   s.pos.copy(pos);
@@ -28,4 +28,42 @@ export function squirtBlob(pos: Vector3, vel: Vector3): void {
 /** Hand a drained spawn record back to the pool. */
 export function recycleSpawn(s: BlobSpawn): void {
   spare.push(s);
+}
+
+/** Enemy return fire queued by EnemySystem, flown by PaintSystem. */
+export const pendingEnemyShots: BlobSpawn[] = [];
+
+export function enemyShot(pos: Vector3, vel: Vector3): void {
+  const s = spare.pop() ?? { pos: new Vector3(), vel: new Vector3() };
+  s.pos.copy(pos);
+  s.vel.copy(vel);
+  pendingEnemyShots.push(s);
+}
+
+/**
+ * Area damage requests (splash from balls, blasts from thrown pistols).
+ * EnemySystem owns the swarm, so it applies these.
+ */
+export interface BlastRequest {
+  pos: Vector3;
+  radius: number;
+  damage: number;
+  /** Show a big damage number and a fat droplet burst. */
+  big: boolean;
+}
+
+export const pendingBlasts: BlastRequest[] = [];
+const spareBlasts: BlastRequest[] = [];
+
+export function requestBlast(pos: Vector3, radius: number, damage: number, big = false): void {
+  const b = spareBlasts.pop() ?? { pos: new Vector3(), radius: 0, damage: 0, big: false };
+  b.pos.copy(pos);
+  b.radius = radius;
+  b.damage = damage;
+  b.big = big;
+  pendingBlasts.push(b);
+}
+
+export function recycleBlast(b: BlastRequest): void {
+  spareBlasts.push(b);
 }

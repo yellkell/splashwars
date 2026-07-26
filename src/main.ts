@@ -16,6 +16,11 @@ import { buildPlatform } from './arena/platform.js';
 import { WeaponSystem } from './systems/WeaponSystem.js';
 import { PaintSystem } from './systems/PaintSystem.js';
 import { EnemySystem } from './systems/EnemySystem.js';
+import { UpgradeSystem } from './systems/UpgradeSystem.js';
+import { PlayerSystem } from './systems/PlayerSystem.js';
+import { run } from './game/run.js';
+import { debugLiveDigits, debugNumbersInstance, popDamage } from './fx/damageNumbers.js';
+import { Vector3 as DebugVec3 } from 'three';
 
 const container = document.getElementById('scene-container') as HTMLDivElement;
 
@@ -45,11 +50,61 @@ World.create(container, {
   setupEnvironment(world);
   buildPlatform(world);
 
-  // Pistols first so the paint bus is fed before the sim drains it, then the
-  // paint sim (blobs, splats, hits), then the waves (spawns, pops, the sign).
+  // Order matters: the swarm must exist before anything queries it, pistols
+  // feed the paint bus before the sim drains it, and the paint sim applies
+  // hits before the wave director resolves deaths and area damage.
+  world.registerSystem(EnemySystem);
+  world.registerSystem(UpgradeSystem);
   world.registerSystem(WeaponSystem);
   world.registerSystem(PaintSystem);
-  world.registerSystem(EnemySystem);
+  world.registerSystem(PlayerSystem);
+
+  // Dev-only inspection hook: lets the browser console (and the headless
+  // smoke tests) read live game state — wave, health, swarm size, upgrade
+  // stacks — without hunting through the scene graph. Stripped from builds.
+  if (import.meta.env.DEV) {
+    (window as unknown as { SPLASH: unknown }).SPLASH = {
+      world,
+      run,
+      frames: 0,
+      /** Damage the first live enemy — exercises the hit/number pipeline. */
+      hitFirstEnemy(amount = 40) {
+        const es = world.getSystem(EnemySystem);
+        if (!es) return -1;
+        for (let i = 0; i < es.swarm.px.length; i++) {
+          if (es.swarm.alive[i]) {
+            es.hit(i, amount);
+            return i;
+          }
+        }
+        return -1;
+      },
+      digits: () => debugLiveDigits(),
+      popAt: (x: number, y: number, z: number, n: number, big = false) =>
+        popDamage(new DebugVec3(x, y, z), n, big),
+      numbers: () => debugNumbersInstance(),
+      stats() {
+        const enemies = world.getSystem(EnemySystem);
+        return {
+          frames: (window as unknown as { SPLASH: { frames: number } }).SPLASH.frames,
+          wave: run.wave,
+          health: Math.round(run.health),
+          maxHealth: run.maxHealth,
+          dead: run.dead,
+          score: run.score,
+          kills: run.kills,
+          enemies: enemies?.swarm.count ?? -1,
+          stacks: run.stacks,
+        };
+      },
+    };
+    // Tick a frame counter so a test can tell "frozen" from "quiet".
+    const tick = () => {
+      (window as unknown as { SPLASH: { frames: number } }).SPLASH.frames++;
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
 
   // eslint-disable-next-line no-console
   console.info('[SPLASH WARS] World ready — tanks full, deck gleaming.');

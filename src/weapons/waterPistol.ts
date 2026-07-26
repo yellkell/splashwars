@@ -176,7 +176,11 @@ export function createWaterPistol(): WaterPistolRig {
     tankInnerLength: innerLen + innerR * 2,
     nozzle,
     setTriggerPull(v: number): void {
-      triggerPivot.rotation.x = v * 0.5;
+      // NEGATIVE x-rotation swings the trigger's blade (which hangs BELOW
+      // the pivot) backward toward the shooter — i.e. it gets squeezed in.
+      // A positive angle pushed it away down-range, which read as the
+      // trigger un-pulling itself.
+      triggerPivot.rotation.x = -v * 0.5;
     },
     dispose(): void {
       liquid.dispose();
