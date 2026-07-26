@@ -173,10 +173,13 @@ export class UpgradeSystem extends createSystem({}) {
   }
 
   private paintCard(card: Card, u: number, v: number): void {
+    // Fat splats: with UPGRADES.paintToPick this lands a card in ~3 balls,
+    // i.e. well under a second of fire. Picking an upgrade is a beat between
+    // waves, not a chore — and with no auto-refill it can't cost half a tank.
     card.splats.push({
       x: u * CARD_W,
       y: v * CARD_H,
-      r: 46 + Math.random() * 34,
+      r: 70 + Math.random() * 50,
     });
     // Coverage estimate: splat area over card area, saturating.
     const area = card.splats.reduce((sum, s) => sum + Math.PI * s.r * s.r, 0);

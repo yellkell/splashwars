@@ -42,6 +42,16 @@ const _head = new Vector3();
 const _shotVel = new Vector3();
 const _near: number[] = [];
 
+/**
+ * A random spawn bearing across the FRONT arc only. Angles are measured so
+ * that -PI/2 is straight ahead (-Z); WAVES.spawnArc opens symmetrically
+ * around it. Nothing ever spawns behind you — in a headset you cannot watch
+ * your back, so a rear spawn is damage you never had a chance to answer.
+ */
+function frontAngle(): number {
+  return -Math.PI / 2 + (Math.random() - 0.5) * WAVES.spawnArc;
+}
+
 type Phase = 'intermission' | 'wave' | 'upgrade';
 
 export class EnemySystem extends createSystem({}) {
@@ -143,8 +153,10 @@ export class EnemySystem extends createSystem({}) {
         swarm.px[i] += (dx / dist) * speed * delta;
         swarm.pz[i] += (dz / dist) * speed * delta;
       } else if (!def.ranged) {
-        // Circle-strafe the deck rather than piling on one spot.
-        const a = Math.atan2(swarm.pz[i], swarm.px[i]) + speed * 0.5 * delta;
+        // Pace across the deck rather than piling on one spot. Direction is
+        // per-enemy and flips at the arc edges (below), so the crowd paces
+        // back and forth in front of you instead of wrapping around behind.
+        const a = Math.atan2(swarm.pz[i], swarm.px[i]) + swarm.strafeDir[i] * speed * 0.5 * delta;
         swarm.px[i] = Math.cos(a) * dist;
         swarm.pz[i] = Math.sin(a) * dist;
       }
@@ -163,6 +175,28 @@ export class EnemySystem extends createSystem({}) {
           const push = ((min - d) / min) * ENEMY.separation * delta * 8;
           swarm.px[i] += (sx / d) * push;
           swarm.pz[i] += (sz / d) * push;
+        }
+      }
+
+      // --- Hard containment in the FRONT arc. ---
+      // Spawning in front is not enough on its own: pacing and crowd shoving
+      // would both walk enemies around behind you over time, which is
+      // exactly the thing that makes a headset fight feel unfair. Clamp
+      // every enemy back inside the arc each frame and bounce its pacing.
+      {
+        const r = Math.hypot(swarm.px[i], swarm.pz[i]);
+        if (r > 1e-3) {
+          const centre = -Math.PI / 2;
+          const half = WAVES.spawnArc / 2;
+          let d = Math.atan2(swarm.pz[i], swarm.px[i]) - centre;
+          while (d > Math.PI) d -= Math.PI * 2;
+          while (d < -Math.PI) d += Math.PI * 2;
+          if (Math.abs(d) > half) {
+            const edge = centre + Math.sign(d) * half;
+            swarm.px[i] = Math.cos(edge) * r;
+            swarm.pz[i] = Math.sin(edge) * r;
+            swarm.strafeDir[i] = -swarm.strafeDir[i] as -1 | 1;
+          }
         }
       }
 
@@ -314,7 +348,7 @@ export class EnemySystem extends createSystem({}) {
 
     const [rMin, rMax] = WAVES.spawnRadius;
     const r = rMin + Math.random() * (rMax - rMin);
-    const a = Math.random() * Math.PI * 2;
+    const a = frontAngle();
     this.swarm.spawn(
       kind,
       Math.cos(a) * r,
@@ -328,7 +362,7 @@ export class EnemySystem extends createSystem({}) {
     // The boss never comes alone.
     if (boss) {
       for (let n = 0; n < 12; n++) {
-        const aa = Math.random() * Math.PI * 2;
+        const aa = frontAngle();
         const rr = rMin + Math.random() * (rMax - rMin);
         this.swarm.spawn(EnemyKind.Scurrier, Math.cos(aa) * rr, ENEMY.hoverHeight, Math.sin(aa) * rr, hpScale, speedScale);
       }

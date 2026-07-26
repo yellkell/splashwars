@@ -3,9 +3,10 @@
 Wave-survival paint fighting in WebXR passthrough. A sleek white-and-red
 sports water pistol riding each hip, a pool-deck platform under your feet,
 and squads of glossy toy enemies bobbing in across your real room. Squeeze
-your grip near a holster to **draw**, then **hold the trigger** (it's analog —
-a light squeeze lobs lazily, a full pull volleys) and fat cricket-ball orbs
-of bubblegum-magenta paint arc out and land with a wet plop — on the floor
+your grip near a holster to **draw**, then pull the trigger — it fires on
+that very frame, no charge-up, no spin-up. It's analog, so a light squeeze
+lobs lazily and a full pull volleys, and fat cricket-ball orbs of
+bubblegum-magenta paint arc out and land with a wet plop — on the floor
 as layered splats, on the enemies as creeping coverage. Paint a toy
 completely and it pops in a shower of droplets. The balls fly Blaston-slow —
 much slower than real projectiles, but quick enough that you'd have to dodge
@@ -17,8 +18,9 @@ on top and you can SEE the paint sloshing inside — a Half-Life: Alyx-style liq
 surface stays level as you tilt the gun, surges when you swing it, ripples
 when you jolt it. That liquid **is** the ammo, one unified system: fire and
 the level visibly drains; run dry and you get a sad dribble and plastic
-clicks; ease off for a beat and the tank glugs itself full again. No gauge,
-no HUD — the water is the UI.
+clicks. **There is no refill** — a tank is a magazine, and **throwing the
+spent gun away is the reload**, because a fresh full one respawns on your
+hip. No gauge, no HUD — the water is the UI.
 
 Where FIRE FIGHT (iron-balls-boxing) was metal — gunmetal, hazard amber,
 anvil clangs — SPLASH WARS is **plastic aesthetics and beautiful water**:
@@ -36,15 +38,18 @@ no models, no textures, no sounds shipped.
   racing-red accents (flank stripes, trigger, muzzle collar), built from
   primitives. They ride your **hips**: squeeze the grip near a holster to
   draw, release it to **throw the whole gun** — it tumbles, bursts on
-  whatever it hits, and a fresh one respawns on your hip.
+  whatever it hits, and a fresh, full one respawns on your hip. With no
+  auto-refill, that throw is your reload.
 - **The sloshing tank** — world-space clipped-liquid shader (the Alyx
   trick): spring-damper slosh driven by real hand acceleration, ripple
   energy, meniscus foam, and a **frosted** blow-moulded shell over fully
   opaque paint, so the liquid reads as a solid volume rather than a glass
-  box. Fill level = ammo; a held trigger drains the tank in ~2.6 s.
+  box. Fill level = ammo; a held trigger drains the tank in ~2.6 s and it
+  does not come back on its own.
 - **Fat, slow paint balls** — cricket-ball-sized orbs at 4.5/s, lobbed at
   Blaston speeds: slow enough to watch fly, fast enough to have to dodge.
-  Enemy return fire speaks the same visual language.
+  The first ball leaves the barrel the instant you pull. Enemy return fire
+  speaks the same visual language.
 - **Damage numbers** — white digits with thick black outlines popping off
   every hit (bigger and gold for blasts), drawn from one instanced digit
   atlas so hundreds of hit markers cost a single draw call.
@@ -58,15 +63,18 @@ no models, no textures, no sounds shipped.
   Lobbers (throw paint from range), Brutes (big and tanky), Splitters
   (burst into Scurriers), and the wave-10 Boss. They deal real damage at
   the deck rim, with an invulnerability window so a crowd is pressure
-  rather than instant death.
+  rather than instant death. **Everything comes from the front 180°** and
+  is held there — nothing spawns or paces around behind you, because in a
+  headset you can't watch your back.
 - **Health without a HUD** — damage throws paint across your **visor**; it
   thickens as you weaken and washes off as you recover. Same philosophy as
   the ammo: read the paint, not a number.
 - **Upgrades you pick by shooting** — between every wave three plastic
   cards swing up and you **hose the one you want** (no menus, no laser
-  pointers). Heavy Paint (damage), Orbiters (vampire-survivors globes that
-  grind anything they touch), Buoyancy (max health + full heal), Paint Bomb
-  (thrown pistols detonate), Splash (balls burst with AOE) — all stacking.
+  pointers) — about three balls, well under a second. Heavy Paint (damage),
+  Orbiters (vampire-survivors globes that grind anything they touch),
+  Buoyancy (max health + full heal), Paint Bomb (thrown pistols detonate),
+  Splash (balls burst with AOE) — all stacking.
 - **Synth SFX** — squirt loops, splats, glugs, empty clicks, enemy lobs,
   paint-bomb whumps, wave horns, upgrade chimes.
 
@@ -88,8 +96,8 @@ Quest 3 (WASD + mouse).
 - **More weapons**: the pistol is weapon one of a family — a pump shotgun
   that needs real pump-action, a pressure sprayer you charge up, a balloon
   lobber — all sharing the unified visible-liquid ammo system.
-- **More upgrades**: tank capacity, refill speed, fire rate, pierce, chain
-  splash, and weapon-specific branches.
+- **More upgrades**: tank capacity, faster holster respawn, fire rate,
+  pierce, chain splash, and weapon-specific branches.
 - **Squeegee your visor** — wipe the paint off your view with a hand swipe
   instead of waiting for regen.
 - **Deck-hop locomotion** (the Eye of the Temple trick, XR-safe): at set

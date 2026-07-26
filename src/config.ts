@@ -7,8 +7,9 @@
  *
  * The fantasy: a chunky plastic super-soaker in each hand with a transparent
  * tank on top — you can SEE the paint sloshing inside (Half-Life: Alyx style
- * liquid), and the liquid in the tank IS your ammo. Fire and the level drops;
- * ease off and it refills. One unified system: what you see is what you have.
+ * liquid), and the liquid in the tank IS your ammo. Fire and the level drops.
+ * There is no refill — when a tank runs dry you throw the gun away and draw a
+ * fresh one off your hip. One unified system: what you see is what you have.
  *
  * Where FIRE FIGHT was metal — gunmetal, hazard amber, anvil clangs — SPLASH
  * WARS is plastic and beautiful water: glossy toy shells, pastel decks,
@@ -31,17 +32,17 @@ export const PLATFORM = {
 /**
  * The water pistol — the whole game. One per hand.
  *
- *  - Hold the trigger and it lobs fat tennis-ball paint orbs.
+ *  - Pull the trigger and it fires INSTANTLY — no charge, no spin-up.
  *  - The visible tank level drains exactly as fast as you fire.
- *  - Let go and the pump gurgles the tank full again.
+ *  - When it's dry it stays dry: throw the gun and draw a fresh one.
  */
 export const PISTOL = {
   // Tank + ammo. `capacity` is seconds of continuous fire in a full tank —
-  // deliberately short: you burn a tank FAST, so the drain is always visible
-  // in the glass and the refill rhythm is part of the fight.
+  // deliberately short, so the drain is always visible in the glass.
+  // There is NO auto-refill: a tank is a magazine. When it runs dry you
+  // throw the gun away and draw the fresh one off your hip — the throw IS
+  // the reload, which is what makes the holster loop the ammo economy.
   capacity: 2.6,
-  refillDelay: 0.55, // seconds after the last shot before refill starts
-  refillRate: 0.75, // tank fraction per second (empty → full in ~1.3 s)
 
   // The balls. Chunky paint orbs, Blaston-slow: MUCH slower than real
   // projectiles but quick enough that you'd have to dodge one — this is the
@@ -122,6 +123,14 @@ export const WAVES = {
   speedPerWave: 0.04, // extra m/s per wave
   hpPerWave: 0.18, // fractional HP bump per wave
   spawnRadius: [6.0, 9.5] as [number, number], // ring the squad appears on
+  /**
+   * Enemies only ever come from the FRONT — this arc, centred on -Z (the
+   * way the deck and the wave sign face). Being surrounded in a headset is
+   * miserable: you cannot watch your back, so anything spawning behind you
+   * is damage you never had a chance to answer.
+   */
+  spawnArc: Math.PI, // 180° across the front
+
   spawnRate: 14, // enemies released per second while a wave pours in
   standoffRadius: 1.35, // enemies press to this radius, then attack
   interWaveDelay: 2.0, // breather before the upgrade board appears
@@ -251,7 +260,9 @@ export const UPGRADES = {
   cardGap: 0.13,
   cardDistance: 1.9, // metres in front of you
   cardHeightY: 1.45,
-  paintToPick: 0.55, // fraction of a card you must cover to choose it
+  // Deliberately low: a card should fall to two or three balls. Picking an
+  // upgrade is a beat between waves, not a chore.
+  paintToPick: 0.18, // fraction of a card you must cover to choose it (~3 balls)
 };
 
 /** Orbital paint globes — the vampire-survivors passive. */

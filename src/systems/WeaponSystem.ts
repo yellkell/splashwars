@@ -5,11 +5,12 @@
  *  - HOLSTERED: the gun rides your hip (an anchor hung off the headset pose,
  *    turning with you). Reach down and SQUEEZE THE GRIP within reach of it
  *    to draw.
- *  - HELD: squeeze the trigger (it's analog — a light squeeze lobs lazily, a
- *    full pull volleys) and tennis-ball paint orbs arc from the nozzle,
- *    Blaston-slow so anyone downrange could dodge them. Every ball drains
- *    the visible tank — the liquid IS the ammo. Run dry: sputter, clicks.
- *    Ease off a beat: the tank glugs itself full.
+ *  - HELD: pull the trigger and it fires on that very frame — no charge-up,
+ *    no spin-up. It's analog, so a light squeeze lobs lazily and a full pull
+ *    volleys, but the first ball is always immediate. Every ball drains the
+ *    visible tank — the liquid IS the ammo — and there is NO auto-refill:
+ *    run dry and it sputters, then clicks. Throwing the spent gun and
+ *    drawing the fresh one off your hip IS the reload.
  *  - FLYING: release the grip and the whole gun is THROWN — it tumbles with
  *    your hand's velocity, paint sloshing wildly (the world-space liquid
  *    plane keeps working mid-tumble, which sells it).
@@ -96,6 +97,8 @@ export class WeaponSystem extends createSystem({
   private motion: [HandMotion, HandMotion] = [new HandMotion(), new HandMotion()];
   private throws: [ThrowState, ThrowState] = [new ThrowState(), new ThrowState()];
   private squeezeWas: [boolean, boolean] = [false, false];
+  /** Trigger edge tracker, so a pull fires on the very same frame. */
+  private firingWas: [boolean, boolean] = [false, false];
   private squirting: [boolean, boolean] = [false, false];
   private clicked: [boolean, boolean] = [false, false];
   private time = 0;
@@ -198,7 +201,7 @@ export class WeaponSystem extends createSystem({
     }
   }
 
-  // --- Held: the firing loop (trigger, drain, sputter, refill). -----------
+  // --- Held: the firing loop (trigger, drain, sputter). -------------------
 
   private updateHeld(
     e: Entity,
@@ -211,16 +214,21 @@ export class WeaponSystem extends createSystem({
     const pull = gp?.getButtonValue(InputComponent.Trigger) ?? 0;
     const pressed = gp?.getButtonPressed(InputComponent.Trigger) ?? false;
     const firing = pressed || pull > 0.25;
+    const firingDown = firing && !this.firingWas[hand];
+    this.firingWas[hand] = firing;
     rig.setTriggerPull(Math.max(pull, pressed ? 1 : 0));
 
     let ammo = e.getValue(WaterPistol, 'ammo') ?? 1;
-    let idle = (e.getValue(WaterPistol, 'idle') ?? 999) + delta;
 
     if (firing && ammo > 0) {
-      idle = 0;
+      // NO CHARGE-UP. The first ball leaves the barrel on the frame you
+      // pull the trigger — priming the accumulator to a full step means
+      // the loop below fires immediately instead of waiting out 1/rate.
+      let emit = (e.getValue(WaterPistol, 'emit') ?? 0);
+      if (firingDown) emit = 1;
       // Pressure-sensitive cadence: a soft squeeze lobs, a crush volleys.
       const rate = PISTOL.fireRate * (0.45 + 0.55 * Math.max(pull, 0.5));
-      let emit = (e.getValue(WaterPistol, 'emit') ?? 0) + rate * delta;
+      emit += rate * delta;
       while (emit >= 1 && ammo > 0) {
         emit -= 1;
         ammo = Math.max(0, ammo - 1 / (PISTOL.capacity * PISTOL.fireRate));
@@ -240,7 +248,9 @@ export class WeaponSystem extends createSystem({
       this.stopSquirt(hand);
 
       if (firing && ammo <= 0) {
-        // Dry trigger: a few weak dribbles, then plastic clicks.
+        // Dry trigger: a few weak dribbles, then plastic clicks. There is
+        // NO auto-refill — a spent gun stays spent. Throwing it away and
+        // drawing the fresh one off your hip IS the reload.
         const sputter = e.getValue(WaterPistol, 'sputter') ?? 0;
         if (sputter > 0 && Math.random() < delta * 9) {
           e.setValue(WaterPistol, 'sputter', sputter - 1);
@@ -250,25 +260,11 @@ export class WeaponSystem extends createSystem({
           pulseHand(this.world.session, HANDS[hand], 0.15, 30);
           this.clicked[hand] = true;
         }
-        idle = 0;
-      }
-
-      // --- Refill: ease off for a beat and the pump glugs it full. ---
-      if (idle >= PISTOL.refillDelay && ammo < 1) {
-        if ((e.getValue(WaterPistol, 'refilling') ?? 0) === 0) {
-          e.setValue(WaterPistol, 'refilling', 1);
-          sfx.refillGlug();
-        }
-        ammo = Math.min(1, ammo + PISTOL.refillRate * delta);
-        // Refilling churns the tank: feed the slosh a gentle boil.
-        rig.liquid.slosh.energy = Math.max(rig.liquid.slosh.energy, 0.35);
-        if (ammo >= 1) e.setValue(WaterPistol, 'refilling', 0);
       }
     }
     if (!firing) this.clicked[hand] = false;
 
     e.setValue(WaterPistol, 'ammo', ammo);
-    e.setValue(WaterPistol, 'idle', idle);
   }
 
   // --- Throw / impact / respawn. ------------------------------------------
@@ -287,6 +283,7 @@ export class WeaponSystem extends createSystem({
     t.spin = HOLSTER.throwSpin * (0.6 + Math.random() * 0.8);
     e.setValue(WaterPistol, 'state', PistolState.Flying);
     rig.setTriggerPull(0);
+    this.firingWas[hand] = false;
     this.stopSquirt(hand);
     sfx.throwWhoosh();
     pulseHand(this.world.session, HANDS[hand], 0.6, 60);

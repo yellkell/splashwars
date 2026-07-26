@@ -19,6 +19,7 @@ import { EnemySystem } from './systems/EnemySystem.js';
 import { UpgradeSystem } from './systems/UpgradeSystem.js';
 import { PlayerSystem } from './systems/PlayerSystem.js';
 import { run } from './game/run.js';
+import { WaterPistol } from './components/WaterPistol.js';
 import { debugLiveDigits, debugNumbersInstance, popDamage } from './fx/damageNumbers.js';
 import { Vector3 as DebugVec3 } from 'three';
 
@@ -80,6 +81,15 @@ World.create(container, {
         return -1;
       },
       digits: () => debugLiveDigits(),
+      pistols: () => {
+        const ws = world.getSystem(WeaponSystem);
+        if (!ws) return [];
+        return [...ws.queries.pistols.entities].map((ent) => ({
+          hand: ent.getValue(WaterPistol, 'hand'),
+          state: ent.getValue(WaterPistol, 'state'),
+          ammo: +(ent.getValue(WaterPistol, 'ammo') ?? 0).toFixed(4),
+        }));
+      },
       popAt: (x: number, y: number, z: number, n: number, big = false) =>
         popDamage(new DebugVec3(x, y, z), n, big),
       numbers: () => debugNumbersInstance(),

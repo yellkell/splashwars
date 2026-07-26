@@ -211,6 +211,8 @@ export class Swarm {
   readonly cooldown = new Float32Array(MAX_ENEMIES);
   /** Squash-and-stretch impulse from being hit, decays to 0. */
   readonly hitPulse = new Float32Array(MAX_ENEMIES);
+  /** Which way it paces across the front arc: +1 or -1. */
+  readonly strafeDir = new Int8Array(MAX_ENEMIES);
 
   private coverageAttr: InstancedBufferAttribute;
   private seedAttr: InstancedBufferAttribute;
@@ -281,6 +283,7 @@ export class Swarm {
     this.alive[slot] = 1;
     this.cooldown[slot] = Math.random() * def.attackInterval;
     this.hitPulse[slot] = 0;
+    this.strafeDir[slot] = Math.random() < 0.5 ? -1 : 1;
 
     this.coverageAttr.array[slot] = 0;
     this.seedAttr.array[slot] = Math.random() * 10;

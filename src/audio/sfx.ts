@@ -170,14 +170,6 @@ export function emptyClick(): void {
   blip(2600, 1400, 0.03, 0.16, 'square');
 }
 
-/** The refill: a few overlapping rising glugs, like a bottle upended. */
-export function refillGlug(): void {
-  for (let i = 0; i < 3; i++) {
-    setTimeout(() => blip(140 + Math.random() * 60, 420 + Math.random() * 120, 0.18, 0.14), i * 110);
-  }
-  noiseBurst(600, 0.8, 0.4, 0.08, 900);
-}
-
 /** Drawing a pistol from the hip — a quick sporty schwip-click. */
 export function draw(): void {
   noiseBurst(3200, 2.0, 0.06, 0.12, 5200);
