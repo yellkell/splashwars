@@ -3,10 +3,13 @@
 Wave-survival paint fighting in WebXR passthrough. A plastic water pistol in
 each hand, a pool-deck platform under your feet, and squads of glossy toy
 enemies bobbing in across your real room. **Hold the trigger** (it's analog —
-a light squeeze dribbles, a full pull hoses) and thick bubblegum-magenta
-paint streams out, arcs, and lands with a wet plop — on the floor as layered
-splats, on the enemies as creeping coverage. Paint a toy completely and it
-pops in a shower of droplets.
+a light squeeze lobs lazily, a full pull volleys) and fat tennis-ball orbs
+of bubblegum-magenta paint arc out and land with a wet plop — on the floor
+as layered splats, on the enemies as creeping coverage. Paint a toy
+completely and it pops in a shower of droplets. The balls fly Blaston-slow —
+much slower than real projectiles, but quick enough that you'd have to dodge
+one — because that's the game's shared projectile language for when enemies
+and bosses start shooting back.
 
 The hero piece is the **tank**: every pistol has a clear blow-moulded tank on
 top and you can SEE the paint inside — a Half-Life: Alyx-style liquid whose
@@ -35,9 +38,10 @@ no models, no textures, no sounds shipped.
   trick): spring–damper slosh sim driven by real hand acceleration, ripple
   energy, meniscus foam line, bright cut-surface fake for the liquid top,
   fill level = ammo. Refilling churns the surface.
-- **Thick paint** — instanced blobs stretched along velocity so the stream
-  fuses into a liquid rope; opaque droplet bursts (normal blending — paint
-  isn't fire); a ring buffer of blobby splat decals stamped on the floor.
+- **Thick paint** — instanced tennis-ball paint orbs, slightly stretched
+  along velocity so they wobble like water balloons; opaque droplet bursts
+  (normal blending — paint isn't fire); a ring buffer of blobby splat
+  decals stamped on the floor.
 - **Toy enemies** — glossy plastic blobs with cartoon eyes that bob in on a
   spawn ring and tread water at a standoff ring. A noise-masked paint shell
   covers them top-down, drip-style, as you land hits; full coverage pops
@@ -100,6 +104,7 @@ src/
   input/haptics.ts        session-live controller rumble (from FIRE FIGHT)
 ```
 
-Blobs deliberately are **not** ECS entities — at ~52/s they'd churn the
-world; they live in typed-array slots rendered through one InstancedMesh.
-Enemies and pistols are entities, queried by the systems above.
+Paint balls deliberately are **not** ECS entities — dual-wielded volleys
+would churn the world; they live in typed-array slots rendered through one
+InstancedMesh. Enemies and pistols are entities, queried by the systems
+above.

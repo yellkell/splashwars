@@ -1,9 +1,9 @@
 /**
  * The paint. Everything that makes the paint read THICK and weighty:
  *
- *  - blob pool: one InstancedMesh of glossy spheres for every paint blob in
- *    flight, each stretched along its velocity so a fast stream fuses into a
- *    liquid rope (the instances overlap at 26 blobs/s);
+ *  - blob pool: one InstancedMesh of glossy tennis-ball-sized paint orbs,
+ *    each slightly stretched along its velocity so it wobbles like a thrown
+ *    water balloon rather than reading as a rigid marble;
  *  - splat pool: a ring buffer of flat splat decals stamped where paint
  *    lands, each a randomly-rotated, randomly-scaled blobby canvas splat;
  *  - droplet pool: opaque round particles (NORMAL blending — paint is
@@ -64,10 +64,13 @@ export class BlobPool {
     for (let i = 0; i < MAX_BLOBS; i++) this.mesh.setMatrixAt(i, _m);
   }
 
-  /** Place slot `i` at `pos`, stretched along `vel` — the liquid-rope look. */
+  /**
+   * Place slot `i` at `pos`, slightly stretched along `vel` — enough wobble
+   * to read as liquid, not so much that a tennis ball becomes a rope.
+   */
   place(i: number, pos: Vector3, vel: Vector3): void {
     const speed = vel.length();
-    const stretch = 1 + Math.min(2.2, speed * 0.16);
+    const stretch = 1 + Math.min(0.45, speed * 0.06);
     _dir.copy(vel).normalize();
     _q.setFromUnitVectors(_zAxis, _dir);
     _s.set(1 / Math.sqrt(stretch), 1 / Math.sqrt(stretch), stretch);

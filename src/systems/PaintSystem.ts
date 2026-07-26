@@ -1,10 +1,10 @@
 /**
  * The paint sim: every blob in flight, everywhere paint lands.
  *
- * Blobs live in flat typed-array slots (no per-blob entities — at 26/s per
- * hand that would churn the ECS) and render through the shared InstancedMesh
- * pool, stretched along their velocity so the stream reads as a liquid rope.
- * Each frame a blob:
+ * Balls live in flat typed-array slots (no per-ball entities — dual-wielded
+ * volleys would churn the ECS) and render through the shared InstancedMesh
+ * pool, slightly stretched along their velocity so they wobble like thrown
+ * water balloons. Each frame a ball:
  *  - arcs under paint-gravity;
  *  - tests the toy enemies — a hit adds coverage, bursts droplets and
  *    sticks a shade onto them (the coverage shader does the painting);
@@ -84,7 +84,7 @@ export class PaintSystem extends createSystem({
           const soak = e.getValue(Enemy, 'soak') ?? 1;
           const coverage = Math.min(1, (e.getValue(Enemy, 'coverage') ?? 0) + PISTOL.coverPerHit / soak);
           e.setValue(Enemy, 'coverage', coverage);
-          dropletBurst(_pos, 5, 0.7);
+          dropletBurst(_pos, 9, 0.9);
           if (this.splatSfxAcc <= 0) {
             sfx.hitSplat();
             this.splatSfxAcc = 0.09;
@@ -97,8 +97,8 @@ export class PaintSystem extends createSystem({
       // --- Floor landing: stamp the splat. ---
       if (!hit && this.py[i] <= PISTOL.blobRadius) {
         _pos.y = 0;
-        this.splats.stamp(_pos, 0.1 + Math.random() * 0.08);
-        dropletBurst(_pos, 3, 0.5);
+        this.splats.stamp(_pos, 0.14 + Math.random() * 0.1);
+        dropletBurst(_pos, 6, 0.7);
         if (this.splatSfxAcc <= 0) {
           sfx.splat();
           this.splatSfxAcc = 0.12;

@@ -31,7 +31,7 @@ export const PLATFORM = {
 /**
  * The water pistol — the whole game. One per hand.
  *
- *  - Hold the trigger and it fires a stream of paint blobs.
+ *  - Hold the trigger and it lobs fat tennis-ball paint orbs.
  *  - The visible tank level drains exactly as fast as you fire.
  *  - Let go and the pump gurgles the tank full again.
  */
@@ -41,18 +41,21 @@ export const PISTOL = {
   refillDelay: 0.9, // seconds after the last shot before refill starts
   refillRate: 0.28, // tank fraction per second (empty → full in ~3.6 s)
 
-  // The stream.
-  fireRate: 26, // blobs per second while the trigger is held
-  muzzleSpeed: 10.0, // blob launch speed (m/s)
+  // The balls. Tennis-ball-sized paint orbs, Blaston-slow: MUCH slower than
+  // real projectiles but quick enough that you'd have to dodge one — this is
+  // the game's shared projectile language, so when enemies and bosses shoot
+  // back later their fire is readable and dodgeable the same way.
+  fireRate: 9, // balls per second at a full trigger pull
+  muzzleSpeed: 4.6, // launch speed (m/s) — watchable in flight, dodge-or-else
   inheritVel: 0.55, // fraction of hand velocity added to the launch
-  spread: 0.022, // radians of random cone spread — a hose, not a laser
-  blobRadius: 0.032, // collision + visual radius of one paint blob
-  gravity: 3.6, // heavy paint arcs, lighter than real gravity for reach
-  lifetime: 2.5, // seconds of flight before a blob is culled
-  coverPerHit: 0.16, // enemy coverage added per landed blob
+  spread: 0.02, // radians of random cone spread — a lob, not a laser
+  blobRadius: 0.034, // collision + visual radius — a tennis ball (Ø ~6.8 cm)
+  gravity: 2.4, // gentle arc so slow balls still reach the spawn ring
+  lifetime: 3.0, // seconds of flight before a ball is culled
+  coverPerHit: 0.32, // enemy coverage per landed ball — 3-4 clean hits pops
 
   // Feel.
-  hapticEvery: 3, // light haptic tick every N blobs
+  hapticEvery: 1, // a chunky ball deserves a thump per shot
   sputterShots: 4, // weak dribble shots fired as the tank hits empty
 
   // The slosh sim — a damped 2D pendulum tilting the liquid surface plane.

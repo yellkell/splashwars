@@ -1,8 +1,9 @@
 /**
  * The water pistols — one per hand, and one unified liquid system:
  *
- *  - squeeze the trigger (it's analog — a light squeeze dribbles, a full
- *    pull hoses) and paint blobs stream from the nozzle;
+ *  - squeeze the trigger (it's analog — a light squeeze lobs lazily, a full
+ *    pull fires at full cadence) and tennis-ball paint orbs arc from the
+ *    nozzle, Blaston-slow so anyone downrange could dodge them;
  *  - every blob fired drains the tank, and the tank's visible liquid level
  *    IS the ammo value — no separate gauge anywhere;
  *  - swing the gun and the SloshSim tips the liquid surface, so the paint
@@ -115,7 +116,7 @@ export class WeaponSystem extends createSystem({
 
       if (firing && ammo > 0) {
         idle = 0;
-        // Pressure-sensitive cadence: a soft squeeze drips, a crush hoses.
+        // Pressure-sensitive cadence: a soft squeeze lobs, a crush volleys.
         const rate = PISTOL.fireRate * (0.45 + 0.55 * Math.max(pull, 0.5));
         let emit = (e.getValue(WaterPistol, 'emit') ?? 0) + rate * delta;
         while (emit >= 1 && ammo > 0) {
@@ -206,7 +207,7 @@ export class WeaponSystem extends createSystem({
     const ticks = (e.getValue(WaterPistol, 'ticks') ?? 0) + 1;
     if (ticks >= PISTOL.hapticEvery) {
       e.setValue(WaterPistol, 'ticks', 0);
-      pulseHand(this.world.session, HANDS[hand], 0.25 + 0.2 * pull, 24);
+      pulseHand(this.world.session, HANDS[hand], 0.4 + 0.25 * pull, 32);
     } else {
       e.setValue(WaterPistol, 'ticks', ticks);
     }
