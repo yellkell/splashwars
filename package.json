@@ -1,0 +1,23 @@
+{
+  "name": "splashwars",
+  "version": "0.1.0",
+  "description": "SPLASH WARS — a WebXR wave-survival paint fight: dual plastic water pistols with real sloshing paint tanks (the liquid IS the ammo), thick satisfying paint that covers enemies until they pop. Plastic aesthetics and beautiful water, built on the Immersive Web SDK.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@iwsdk/core": "0.4.2",
+    "three": "0.184.0"
+  },
+  "devDependencies": {
+    "@iwsdk/vite-plugin-dev": "0.4.2",
+    "@types/three": "0.184.0",
+    "typescript": "^5.6.0",
+    "vite": "^7.0.0"
+  }
+}
