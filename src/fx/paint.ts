@@ -276,6 +276,11 @@ export function updatePaintPools(dt: number): void {
   dropletPool?.update(dt);
 }
 
+/** Stamp a floor splat directly (thrown guns burst outside PaintSystem). */
+export function stampSplat(pos: Vector3, size: number): void {
+  splatPool?.stamp(pos, size);
+}
+
 /** A wet burst of droplets off an impact point. */
 export function dropletBurst(pos: Vector3, count: number, punch = 1): void {
   if (!dropletPool) return;

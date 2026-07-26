@@ -1,8 +1,9 @@
 # SPLASH WARS 🔫💦
 
-Wave-survival paint fighting in WebXR passthrough. A plastic water pistol in
-each hand, a pool-deck platform under your feet, and squads of glossy toy
-enemies bobbing in across your real room. **Hold the trigger** (it's analog —
+Wave-survival paint fighting in WebXR passthrough. A sleek white-and-red
+sports water pistol riding each hip, a pool-deck platform under your feet,
+and squads of glossy toy enemies bobbing in across your real room. Squeeze
+your grip near a holster to **draw**, then **hold the trigger** (it's analog —
 a light squeeze lobs lazily, a full pull volleys) and fat tennis-ball orbs
 of bubblegum-magenta paint arc out and land with a wet plop — on the floor
 as layered splats, on the enemies as creeping coverage. Paint a toy
@@ -31,9 +32,14 @@ no models, no textures, no sounds shipped.
 
 ## What's in this build
 
-- **Dual plastic water pistols** — procedural super-soaker-style toys
-  (mirrored teal/orange liveries), squeezable trigger on a pivot, muzzle
-  spread, hand-velocity inheritance on the stream, haptic ticks per squirt.
+- **Dual sports water pistols** — sleek competition-white shells with
+  racing-red stripes, trigger, guard, bands and nozzle collar, procedurally
+  built from primitives. They live on your **hip holsters**: squeeze the
+  grip near your hip to draw, squeeze the trigger to fire, release the grip
+  to **throw the whole gun** — it tumbles (paint sloshing all the way),
+  bursts into paint the instant it hits the floor or an enemy (dumping its
+  whole remaining tank as coverage on a direct hit), and vanishes. A fresh
+  one appears back on your hip a beat later.
 - **The sloshing tank** — world-space clipped-liquid shader (the Alyx
   trick): spring–damper slosh sim driven by real hand acceleration, ripple
   energy, meniscus foam line, bright cut-surface fake for the liquid top,

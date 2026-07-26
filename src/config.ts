@@ -69,6 +69,29 @@ export const PISTOL = {
   },
 };
 
+/**
+ * The hip holsters — one pistol rides each hip. Reach down, squeeze the GRIP
+ * to draw; release the grip to throw the whole gun. A thrown pistol tumbles
+ * (paint sloshing all the way), bursts on whatever it hits — floor or enemy —
+ * and a fresh one respawns on your hip a beat later. Throwing a full tank at
+ * an enemy dumps the whole tank's paint on it at once.
+ */
+export const HOLSTER = {
+  lateral: 0.24, // hip offset left/right of the head, metres
+  height: 0.96, // holster height above the floor
+  forward: 0.03, // nudged forward so it's visible in your periphery
+  drawRadius: 0.45, // squeeze the grip within this of the holster to draw
+  respawnDelay: 1.2, // seconds after a throw before the fresh gun appears
+  throwBoost: 1.15, // hand velocity multiplier on release
+  minThrowSpeed: 1.2, // a limp drop still clears your platform edge
+  throwGravity: 5.5, // guns are heavier than paint balls
+  throwSpin: 9, // rad/s tumble in flight — the tank sloshes wildly
+  hitRadius: 0.14, // the gun's collision radius vs enemies
+  // Coverage a thrown gun dumps on an enemy: base + remaining tank * gain.
+  hitCoverBase: 0.4,
+  hitCoverAmmo: 0.55,
+};
+
 /** Where paint may fly: a generous invisible cage around the arena. */
 export const ARENA_BOUNDS = {
   radius: 14, // blobs beyond this are culled
@@ -112,9 +135,9 @@ export const PALETTE = {
   paint: 0xf0299b, // your paint — bubblegum magenta
   paintDeep: 0xa50f66, // shadowed depths of the same paint
   paintFoam: 0xffb8df, // meniscus/foam line where paint meets air
-  toyOrange: 0xff8a2a, // pistol body shell
-  toyTeal: 0x1fc4c9, // pistol grip + accents
-  toyYellow: 0xffd23f, // pump + cap details
+  sportWhite: 0xf7f9fc, // pistol shell — competition white
+  sportRed: 0xe0312e, // racing-red accents: stripes, trigger, nozzle
+  sportSmoke: 0x39424b, // smoked details: grip inlay, nozzle bore
   deckWhite: 0xf7f4ec, // pool-deck plastic
   deckAqua: 0x8fdfe8, // deck rim tube
   enemyShell: 0xe8f6f8, // unpainted enemy plastic

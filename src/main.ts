@@ -28,7 +28,8 @@ World.create(container, {
   },
   // A stationary wave shooter: no locomotion yet (the deck-hop movement idea
   // comes later — the platform will move with you on it), no grab system
-  // (the pistols are bonded to your hands, not grabbed).
+  // (the pistols live on your hips and hand off between grip/hand via
+  // WeaponSystem's own draw/throw logic, not the generic grab system).
   features: {
     grabbing: false,
     locomotion: false,

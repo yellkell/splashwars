@@ -178,6 +178,23 @@ export function refillGlug(): void {
   noiseBurst(600, 0.8, 0.4, 0.08, 900);
 }
 
+/** Drawing a pistol from the hip — a quick sporty schwip-click. */
+export function draw(): void {
+  noiseBurst(3200, 2.0, 0.06, 0.12, 5200);
+  blip(700, 1150, 0.06, 0.14, 'triangle');
+}
+
+/** A gun leaving your hand — heavier whoosh than a paint ball. */
+export function throwWhoosh(): void {
+  noiseBurst(500, 0.8, 0.3, 0.2, 180);
+}
+
+/** A thrown gun bursting — deep plastic crack under a big wet splash. */
+export function gunBurst(): void {
+  blip(180, 60, 0.14, 0.3, 'square');
+  noiseBurst(800, 0.9, 0.45, 0.32, 220);
+}
+
 /** A new wave rolling in — bright toy fanfare over a water swell. */
 export function waveHorn(): void {
   blip(523, 523, 0.16, 0.2, 'triangle');
