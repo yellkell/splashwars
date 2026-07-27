@@ -24,7 +24,8 @@ import { Swarm } from '../enemies/swarm.js';
 import { dropletBurst, initPaintPools } from '../fx/paint.js';
 import { initDamageNumbers, popDamage } from '../fx/damageNumbers.js';
 import { enemyShot, pendingBlasts, recycleBlast } from '../combat/paintBus.js';
-import { damagePlayer, run } from '../game/run.js';
+import { run } from '../game/run.js';
+import { damageTower, tower } from '../game/tower.js';
 import { app } from '../game/appState.js';
 import * as sfx from '../audio/sfx.js';
 import {
@@ -33,7 +34,7 @@ import {
   ENEMY_TYPES,
   EnemyKind,
   PALETTE,
-  PLATFORM,
+  TOWER,
   WAVES,
   WAVE_ROSTER,
   type EnemyKindId,
@@ -153,9 +154,10 @@ export class EnemySystem extends createSystem({}) {
       recycleBlast(blast);
     }
 
-    // --- Drive every live enemy. ---
+    // --- Drive every live enemy. Everything wants the TOWER. ---
     swarm.rebuildGrid();
-    const deckEdge = PLATFORM.radius + 0.25;
+    const tx = tower.pos.x;
+    const tz = tower.pos.z;
 
     for (let i = 0; i < swarm.px.length; i++) {
       if (!swarm.alive[i]) continue;
@@ -164,27 +166,53 @@ export class EnemySystem extends createSystem({}) {
       const def = ENEMY_TYPES[kind];
       swarm.hitPulse[i] = Math.max(0, swarm.hitPulse[i] - delta * 4);
 
-      const dx = -swarm.px[i];
-      const dz = -swarm.pz[i];
+      const dx = tx - swarm.px[i];
+      const dz = tz - swarm.pz[i];
       const dist = Math.hypot(dx, dz) || 1e-3;
-      // Yaw so the geometry's -Z face looks at the player (rotY(θ) maps -Z
+      // Yaw so the geometry's -Z face looks at the tower (rotY(θ) maps -Z
       // onto (-sinθ, -cosθ), so θ = atan2(-dx̂, -dẑ)).
       swarm.facing[i] = Math.atan2(-dx / dist, -dz / dist);
 
-      // Ranged types stop further out; melee press right to the rim.
-      const standoff = def.ranged ? 2.6 + (kind === EnemyKind.Boss ? 1.2 : 0) : WAVES.standoffRadius;
-      const speed = WAVES.baseSpeed * swarm.speed[i] * (1 + (run.wave - 1) * 0.06);
+      // Ranged types stop further out; melee press right up to the tower.
+      const standoff = def.ranged
+        ? 2.6 + (kind === EnemyKind.Boss ? 1.2 : 0)
+        : TOWER.radius + swarm.radius[i] + 0.12;
+      let speed = WAVES.baseSpeed * swarm.speed[i] * (1 + (run.wave - 1) * 0.06);
+
+      // --- Movement personality: each toy travels like what it is. ---
+      let lateral = 0;
+      switch (kind) {
+        case EnemyKind.Drifter:
+          // Beach balls BOUNCE in: forward motion pulses with each hop.
+          speed *= 0.35 + 1.5 * Math.max(0, Math.sin(this.time * 3.2 + swarm.phase[i]));
+          break;
+        case EnemyKind.Scurrier:
+          // Droplets dart in a zigzag — quick, jittery, hard to lead.
+          speed *= 0.45 + 1.2 * (0.5 + 0.5 * Math.sin(this.time * 5.1 + swarm.phase[i]));
+          lateral = Math.sin(this.time * 4.3 + swarm.phase[i]) * 0.6;
+          break;
+        case EnemyKind.Lobber:
+          // Balloons waddle, swaying side to side as the water shifts.
+          lateral = Math.sin(this.time * 1.9 + swarm.phase[i]) * 0.3;
+          break;
+        case EnemyKind.Splitter:
+          // Foam drifts on a lazy weave.
+          lateral = Math.sin(this.time * 2.6 + swarm.phase[i]) * 0.45;
+          break;
+        // Big Ducks and the Boss just PLOW: dead straight, inevitable.
+      }
+
+      // Freeze forward motion during an attack so the lunge reads clean.
+      if (swarm.attackAnim[i] > 0) speed = 0;
 
       if (dist > standoff) {
         swarm.px[i] += (dx / dist) * speed * delta;
         swarm.pz[i] += (dz / dist) * speed * delta;
-      } else if (!def.ranged) {
-        // Pace across the deck rather than piling on one spot. Direction is
-        // per-enemy and flips at the arc edges (below), so the crowd paces
-        // back and forth in front of you instead of wrapping around behind.
-        const a = Math.atan2(swarm.pz[i], swarm.px[i]) + swarm.strafeDir[i] * speed * 0.5 * delta;
-        swarm.px[i] = Math.cos(a) * dist;
-        swarm.pz[i] = Math.sin(a) * dist;
+        if (lateral !== 0) {
+          // Perpendicular sway (left of the approach direction).
+          swarm.px[i] += (-dz / dist) * lateral * speed * delta;
+          swarm.pz[i] += (dx / dist) * lateral * speed * delta;
+        }
       }
 
       // --- Crowd separation so hundreds don't collapse into one blob. ---
@@ -204,23 +232,25 @@ export class EnemySystem extends createSystem({}) {
         }
       }
 
-      // --- Hard containment in the FRONT arc. ---
-      // Spawning in front is not enough on its own: pacing and crowd shoving
-      // would both walk enemies around behind you over time, which is
-      // exactly the thing that makes a headset fight feel unfair. Clamp
-      // every enemy back inside the arc each frame and bounce its pacing.
+      // --- Hard containment in the FRONT arc (measured from the tower). ---
+      // Spawning in front is not enough on its own: weaving and crowd
+      // shoving would both walk enemies around behind you over time — the
+      // thing that makes a headset fight feel unfair. Clamp every enemy
+      // back inside the arc each frame.
       {
-        const r = Math.hypot(swarm.px[i], swarm.pz[i]);
+        const rx = swarm.px[i] - tx;
+        const rz = swarm.pz[i] - tz;
+        const r = Math.hypot(rx, rz);
         if (r > 1e-3) {
           const centre = -Math.PI / 2;
           const half = WAVES.spawnArc / 2;
-          let d = Math.atan2(swarm.pz[i], swarm.px[i]) - centre;
+          let d = Math.atan2(rz, rx) - centre;
           while (d > Math.PI) d -= Math.PI * 2;
           while (d < -Math.PI) d += Math.PI * 2;
           if (Math.abs(d) > half) {
             const edge = centre + Math.sign(d) * half;
-            swarm.px[i] = Math.cos(edge) * r;
-            swarm.pz[i] = Math.sin(edge) * r;
+            swarm.px[i] = tx + Math.cos(edge) * r;
+            swarm.pz[i] = tz + Math.sin(edge) * r;
             swarm.strafeDir[i] = -swarm.strafeDir[i] as -1 | 1;
           }
         }
@@ -235,20 +265,32 @@ export class EnemySystem extends createSystem({}) {
         Math.sin(this.time * ENEMY.bobRate + swarm.phase[i]) * ENEMY.bobAmplitude * (1 - covered * 0.6) -
         covered * 0.1;
 
-      // --- Threat: attack the player. ---
-      swarm.cooldown[i] -= delta;
-      if (swarm.cooldown[i] <= 0 && !run.dead) {
-        if (def.ranged) {
-          swarm.cooldown[i] = def.attackInterval * (0.75 + Math.random() * 0.5);
-          this.fireAtPlayer(i);
-        } else if (dist <= deckEdge + swarm.radius[i]) {
-          swarm.cooldown[i] = def.attackInterval;
-          this.hitPlayer(def.attack, i);
+      // --- Threat: telegraphed attacks on the TOWER. ---
+      // The cooldown only STARTS the windup; nothing lands until the snap
+      // (ENEMY.attackStrikeAt), so every hit is readable — and popping the
+      // toy mid-windup cancels the attack entirely.
+      if (swarm.attackAnim[i] > 0) {
+        const before = swarm.attackAnim[i];
+        swarm.attackAnim[i] = Math.max(0, before - delta / ENEMY.attackDuration);
+        if (before > ENEMY.attackStrikeAt && swarm.attackAnim[i] <= ENEMY.attackStrikeAt && !run.dead) {
+          if (def.ranged) {
+            this.fireLob(i);
+          } else if (dist <= standoff + swarm.radius[i] * 1.6) {
+            this.strikeTower(def.attack, i);
+          }
+        }
+      } else {
+        swarm.cooldown[i] -= delta;
+        const inRange = def.ranged ? dist <= standoff + 0.4 : dist <= standoff + 0.05;
+        if (swarm.cooldown[i] <= 0 && inRange && !run.dead) {
+          swarm.cooldown[i] = def.attackInterval * (0.8 + Math.random() * 0.4);
+          swarm.attackAnim[i] = 1;
+          sfx.enemyWindup();
         }
       }
     }
 
-    swarm.commit(this.time);
+    swarm.commit(this.time, tx, tz);
   }
 
   // --- Damage application (the swarm's only writer). ----------------------
@@ -310,29 +352,40 @@ export class EnemySystem extends createSystem({}) {
 
   // --- Enemy offence. ------------------------------------------------------
 
-  private fireAtPlayer(i: number): void {
+  /**
+   * A Slinger's lob, released at the snap of its windup. Mostly aimed at
+   * the tower (that's what they're here for), sometimes at YOU — keeping
+   * the dodge game alive and the player a real participant in the threat.
+   */
+  private fireLob(i: number): void {
     const swarm = this.swarm;
-    this.world.camera.getWorldPosition(_head);
+    if (Math.random() < 0.35) this.world.camera.getWorldPosition(_head);
+    else _head.set(tower.pos.x, 0.85, tower.pos.z);
     _pos.set(swarm.px[i], swarm.py[i], swarm.pz[i]);
     _shotVel.copy(_head).sub(_pos);
     const dist = _shotVel.length();
     _shotVel.normalize();
-    // Lead the arc so a lobbed shot actually lands near your head.
+    // Lead the arc so the lob actually lands near the mark.
     _shotVel.multiplyScalar(ENEMY_SHOT.speed);
     _shotVel.y += (ENEMY_SHOT.gravity * dist) / (2 * ENEMY_SHOT.speed);
-    // A little slop so a wall of lobbers isn't a wall of perfect shots.
+    // A little slop so a wall of Slingers isn't a wall of perfect shots.
     _shotVel.x += (Math.random() - 0.5) * 0.6;
     _shotVel.z += (Math.random() - 0.5) * 0.6;
     enemyShot(_pos, _shotVel);
     sfx.enemyLob();
   }
 
-  private hitPlayer(amount: number, i: number): void {
+  /** A melee toy's snap landing on the tower. */
+  private strikeTower(amount: number, i: number): void {
     const swarm = this.swarm;
-    _pos.set(swarm.px[i], swarm.py[i], swarm.pz[i]);
+    _pos.set(
+      tower.pos.x + (swarm.px[i] - tower.pos.x) * 0.3,
+      0.5 + Math.random() * 0.4,
+      tower.pos.z + (swarm.pz[i] - tower.pos.z) * 0.3,
+    );
     dropletBurst(_pos, 6, 0.8);
-    if (damagePlayer(amount)) sfx.playerDown();
-    else sfx.playerHurt();
+    sfx.towerHit();
+    damageTower(amount);
   }
 
   // --- Waves. --------------------------------------------------------------
@@ -376,9 +429,9 @@ export class EnemySystem extends createSystem({}) {
     const a = frontAngle();
     this.swarm.spawn(
       kind,
-      Math.cos(a) * r,
+      tower.pos.x + Math.cos(a) * r,
       ENEMY.hoverHeight,
-      Math.sin(a) * r,
+      tower.pos.z + Math.sin(a) * r,
       hpScale,
       speedScale,
       boss ? WAVES.bossScale : 1,
@@ -389,7 +442,14 @@ export class EnemySystem extends createSystem({}) {
       for (let n = 0; n < 12; n++) {
         const aa = frontAngle();
         const rr = rMin + Math.random() * (rMax - rMin);
-        this.swarm.spawn(EnemyKind.Scurrier, Math.cos(aa) * rr, ENEMY.hoverHeight, Math.sin(aa) * rr, hpScale, speedScale);
+        this.swarm.spawn(
+          EnemyKind.Scurrier,
+          tower.pos.x + Math.cos(aa) * rr,
+          ENEMY.hoverHeight,
+          tower.pos.z + Math.sin(aa) * rr,
+          hpScale,
+          speedScale,
+        );
       }
     }
   }

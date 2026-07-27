@@ -5,12 +5,12 @@
  *  - HOLSTERED: the gun rides your hip (an anchor hung off the headset pose,
  *    turning with you). Reach down and SQUEEZE THE GRIP within reach of it
  *    to draw.
- *  - HELD: pull the trigger and it fires on that very frame — no charge-up,
- *    no spin-up. It's analog, so a light squeeze lobs lazily and a full pull
- *    volleys, but the first ball is always immediate. Every ball drains the
- *    visible tank — the liquid IS the ammo — and there is NO auto-refill:
- *    run dry and it sputters, then clicks. Throwing the spent gun and
- *    drawing the fresh one off your hip IS the reload.
+ *  - HELD: SEMI-AUTO — one ball per trigger press, on that very frame, no
+ *    charge-up. The AUTO SOAKER upgrade turns holding the trigger into full
+ *    auto, and stacks crank the cadence. Every ball drains the visible
+ *    tank — the liquid IS the ammo — and there is NO auto-refill: run dry
+ *    and it clicks. Throwing the spent gun and drawing the fresh one off
+ *    your hip IS the reload.
  *  - FLYING: release the grip and the whole gun is THROWN — it tumbles with
  *    your hand's velocity, paint sloshing wildly (the world-space liquid
  *    plane keeps working mid-tumble, which sells it).
@@ -31,8 +31,9 @@ import { requestBlast, squirtBlob } from '../combat/paintBus.js';
 import { dropletBurst, stampSplat } from '../fx/paint.js';
 import { pulseHand } from '../input/haptics.js';
 import { run, UpgradeId } from '../game/run.js';
+import { app } from '../game/appState.js';
 import * as sfx from '../audio/sfx.js';
-import { AOE, HOLSTER, PISTOL } from '../config.js';
+import { AOE, AUTO, HOLSTER, PISTOL } from '../config.js';
 
 const HANDS = ['left', 'right'] as const;
 type Hand = 0 | 1;
@@ -218,20 +219,37 @@ export class WeaponSystem extends createSystem({
     this.firingWas[hand] = firing;
     rig.setTriggerPull(Math.max(pull, pressed ? 1 : 0));
 
-    let ammo = e.getValue(WaterPistol, 'ammo') ?? 1;
+    // While the tower ghost is out, the trigger is the PLACE button — don't
+    // also squirt paint over the spot you're choosing.
+    if (app.phase === 'placing') return;
 
-    if (firing && ammo > 0) {
-      // NO CHARGE-UP. The first ball leaves the barrel on the frame you
-      // pull the trigger — priming the accumulator to a full step means
-      // the loop below fires immediately instead of waiting out 1/rate.
-      let emit = (e.getValue(WaterPistol, 'emit') ?? 0);
-      if (firingDown) emit = 1;
-      // Pressure-sensitive cadence: a soft squeeze lobs, a crush volleys.
-      const rate = PISTOL.fireRate * (0.45 + 0.55 * Math.max(pull, 0.5));
-      emit += rate * delta;
+    let ammo = e.getValue(WaterPistol, 'ammo') ?? 1;
+    const drain = 1 / PISTOL.shotsPerTank;
+    const autoStacks = run.stacks[UpgradeId.AutoFire];
+
+    // --- SEMI-AUTO: exactly one ball per trigger press, instantly. ---
+    if (firingDown) {
+      if (ammo > 0) {
+        ammo = Math.max(0, ammo - drain);
+        this.fireBlob(e, rig, hand, Math.max(pull, 0.5), motion.vel, 1);
+        sfx.squirtShot();
+        this.clicked[hand] = false;
+      } else if (!this.clicked[hand]) {
+        // Dry press: one sad dribble, then plastic clicks. NO auto-refill —
+        // throwing the spent gun and drawing fresh IS the reload.
+        this.fireBlob(e, rig, hand, 0.2, motion.vel, 0.3);
+        sfx.emptyClick();
+        pulseHand(this.world.session, HANDS[hand], 0.15, 30);
+        this.clicked[hand] = true;
+      }
+      e.setValue(WaterPistol, 'emit', 0);
+    } else if (firing && autoStacks > 0 && ammo > 0) {
+      // --- AUTO SOAKER: hold to fire; stacks crank the cadence. ---
+      const rate = AUTO.rate * Math.pow(AUTO.ratePerStack, autoStacks - 1);
+      let emit = (e.getValue(WaterPistol, 'emit') ?? 0) + rate * delta;
       while (emit >= 1 && ammo > 0) {
         emit -= 1;
-        ammo = Math.max(0, ammo - 1 / (PISTOL.capacity * PISTOL.fireRate));
+        ammo = Math.max(0, ammo - drain);
         this.fireBlob(e, rig, hand, Math.max(pull, 0.5), motion.vel, 1);
       }
       e.setValue(WaterPistol, 'emit', emit);
@@ -239,30 +257,12 @@ export class WeaponSystem extends createSystem({
         sfx.squirtStart(hand);
         this.squirting[hand] = true;
       }
-      if (ammo <= 0) {
-        // The tank just ran dry mid-squeeze: queue the sad dribble.
-        e.setValue(WaterPistol, 'sputter', PISTOL.sputterShots);
-      }
     } else {
       e.setValue(WaterPistol, 'emit', 0);
       this.stopSquirt(hand);
-
-      if (firing && ammo <= 0) {
-        // Dry trigger: a few weak dribbles, then plastic clicks. There is
-        // NO auto-refill — a spent gun stays spent. Throwing it away and
-        // drawing the fresh one off your hip IS the reload.
-        const sputter = e.getValue(WaterPistol, 'sputter') ?? 0;
-        if (sputter > 0 && Math.random() < delta * 9) {
-          e.setValue(WaterPistol, 'sputter', sputter - 1);
-          this.fireBlob(e, rig, hand, 0.2, motion.vel, 0.3);
-        } else if (sputter <= 0 && !this.clicked[hand]) {
-          sfx.emptyClick();
-          pulseHand(this.world.session, HANDS[hand], 0.15, 30);
-          this.clicked[hand] = true;
-        }
-      }
     }
     if (!firing) this.clicked[hand] = false;
+    if (!(firing && autoStacks > 0 && ammo > 0)) this.stopSquirt(hand);
 
     e.setValue(WaterPistol, 'ammo', ammo);
   }

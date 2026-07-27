@@ -2,8 +2,10 @@
  * The app's top-level flow — the skeleton the whole production experience
  * hangs off:
  *
- *   TITLE ──start──▶ PLAYING ──death──▶ GAMEOVER ──again──▶ PLAYING
- *                                          └────menu────▶ TITLE
+ *   TITLE ─start─▶ PLACING ─trigger─▶ PLAYING ─death/tower─▶ GAMEOVER
+ *                  (plant the ghost                     │        │
+ *                   lifeguard tower)                    ◀──again─┘
+ *                                            GAMEOVER ──menu──▶ TITLE
  *
  * A plain module singleton (same pattern as run/paintBus). MenuSystem drives
  * the transitions; EnemySystem's wave director only runs while `playing`.
@@ -11,7 +13,7 @@
  * cards as the upgrades, so shooting is the only verb the game ever needs.
  */
 
-export type AppPhase = 'title' | 'playing' | 'gameover';
+export type AppPhase = 'title' | 'placing' | 'playing' | 'gameover';
 
 export const app = {
   phase: 'title' as AppPhase,

@@ -19,14 +19,19 @@
 export const GAME_TITLE = 'SPLASH WARS';
 
 /**
- * The player's pool-deck platform: a round glossy slab, Blaston-ish footprint
- * so a real play space maps onto it. Enemies advance toward its rim.
+ * THE TOWER — what the whole fight is about. To start a run you PLACE it:
+ * a ghost lifeguard tower follows your gaze across the real floor, you pull
+ * the trigger, and it plants there. Every wave then comes for the tower,
+ * not for you — you are the defense. Enemy hits soak it in THEIR paint;
+ * read its health by how purple it's getting. Fully soaked = run over.
  */
-export const PLATFORM = {
-  radius: 0.95, // deck radius — your whole play space
-  thickness: 0.12, // slab depth below the floor line — reads as a pedestal
-  rimRadius: 0.045, // the inflatable-looking rounded rim tube
-  rimLift: 0.012, // paint-colour glow line height above the floor
+export const TOWER = {
+  radius: 0.34, // collision footprint the toys mob
+  height: 1.35, // top of the umbrella
+  maxHealth: 400,
+  placeMin: 0.6, // metres from you the ghost may sit
+  placeMax: 3.0,
+  hitFlash: 0.25, // seconds of wobble when it takes a hit
 };
 
 /**
@@ -37,17 +42,16 @@ export const PLATFORM = {
  *  - When it's dry it stays dry: throw the gun and draw a fresh one.
  */
 export const PISTOL = {
-  // Tank + ammo. `capacity` is seconds of continuous fire in a full tank —
-  // deliberately short, so the drain is always visible in the glass.
-  // There is NO auto-refill: a tank is a magazine. When it runs dry you
-  // throw the gun away and draw the fresh one off your hip — the throw IS
-  // the reload, which is what makes the holster loop the ammo economy.
-  capacity: 2.6,
+  // Tank + ammo. SEMI-AUTO: one ball per trigger PRESS (the AUTO SOAKER
+  // upgrade unlocks hold-to-fire — see AUTO). The tank is a magazine of
+  // `shotsPerTank` balls with NO auto-refill: when it runs dry you throw
+  // the gun away and draw the fresh one off your hip — the throw IS the
+  // reload, which is what makes the holster loop the ammo economy.
+  shotsPerTank: 14,
 
   // The balls. Chunky paint orbs, Blaston-slow: MUCH slower than real
   // projectiles but quick enough that you'd have to dodge one — this is the
   // game's shared projectile language, so enemy return fire reads the same.
-  fireRate: 4.5, // balls per second at a full trigger pull — few and fat
   muzzleSpeed: 7.2, // launch speed (m/s) — snappier, still readable in flight
   inheritVel: 0.55, // fraction of hand velocity added to the launch
   spread: 0.018, // radians of random cone spread — a lob, not a laser
@@ -58,7 +62,6 @@ export const PISTOL = {
 
   // Feel.
   hapticEvery: 1, // a chunky ball deserves a thump per shot
-  sputterShots: 3, // weak dribble shots fired as the tank hits empty
 
   // The slosh sim — a damped 2D pendulum tilting the liquid surface plane.
   slosh: {
@@ -69,6 +72,17 @@ export const PISTOL = {
     rippleGain: 2.2, // slosh energy → shader ripple amplitude
     energyDecay: 1.6, // per-second decay of ripple energy
   },
+};
+
+/**
+ * AUTO SOAKER — the auto-fire upgrade path. Stack 1 turns the pistol from
+ * semi-auto into hold-to-fire at `rate`; every further stack multiplies the
+ * cadence. The semi-auto press always stays available (and is still the
+ * fastest possible single shot).
+ */
+export const AUTO = {
+  rate: 3.2, // balls per second at the first AUTO SOAKER stack
+  ratePerStack: 1.35, // cadence multiplier per additional stack
 };
 
 /**
@@ -144,6 +158,14 @@ export const ENEMY = {
   hoverHeight: 1.05, // body centre height above the floor
   popDroplets: 14, // droplet burst size when one pops
   separation: 0.55, // crowd push-apart strength so the swarm doesn't stack
+  /**
+   * The attack telegraph: every attack (melee chomp or ranged lob) runs a
+   * fixed-length animation — rear back and crouch, SNAP forward, recover —
+   * and the damage/shot lands exactly at the snap. You can always see an
+   * attack coming, and interrupting the windup (popping the toy) cancels it.
+   */
+  attackDuration: 0.9, // seconds for the whole windup-snap-recover
+  attackStrikeAt: 0.45, // anim position (1→0) where the hit actually lands
 };
 
 /**

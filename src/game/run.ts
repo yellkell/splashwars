@@ -12,6 +12,7 @@ import { PISTOL, PLAYER } from '../config.js';
 
 export const UpgradeId = {
   Damage: 'damage',
+  AutoFire: 'autoFire',
   Orbital: 'orbital',
   Health: 'health',
   ThrowBlast: 'throwBlast',
@@ -39,6 +40,14 @@ export const UPGRADE_CATALOGUE: UpgradeDef[] = [
     color: '#e0312e',
     max: 8,
     effect: () => '+35% ball damage',
+  },
+  {
+    id: UpgradeId.AutoFire,
+    title: 'AUTO SOAKER',
+    blurb: 'The trigger holds itself',
+    color: '#53c8ec',
+    max: 5,
+    effect: (s) => (s === 0 ? 'Hold to fire: FULL AUTO' : '+35% fire rate'),
   },
   {
     id: UpgradeId.Orbital,
@@ -88,12 +97,15 @@ export interface RunState {
   wave: number;
   score: number;
   kills: number;
+  /** Why the run ended, for the game-over plate. */
+  endReason: 'player' | 'tower' | '';
   stacks: Record<UpgradeIdT, number>;
 }
 
 function emptyStacks(): Record<UpgradeIdT, number> {
   return {
     [UpgradeId.Damage]: 0,
+    [UpgradeId.AutoFire]: 0,
     [UpgradeId.Orbital]: 0,
     [UpgradeId.Health]: 0,
     [UpgradeId.ThrowBlast]: 0,
@@ -112,6 +124,7 @@ export const run: RunState = {
   wave: 0,
   score: 0,
   kills: 0,
+  endReason: '',
   stacks: emptyStacks(),
 };
 
@@ -126,6 +139,7 @@ export function resetRun(): void {
   run.wave = 0;
   run.score = 0;
   run.kills = 0;
+  run.endReason = '';
   run.stacks = emptyStacks();
 }
 
@@ -171,6 +185,7 @@ export function damagePlayer(amount: number): boolean {
   if (run.health <= 0) {
     run.health = 0;
     run.dead = true;
+    run.endReason = 'player';
     run.deathTimer = PLAYER.deathRespawnDelay;
     return true;
   }

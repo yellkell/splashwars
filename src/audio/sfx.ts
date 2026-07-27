@@ -187,6 +187,36 @@ export function gunBurst(): void {
   noiseBurst(800, 0.9, 0.45, 0.32, 220);
 }
 
+/** One semi-auto shot — a tight squirt chirp (the loop is for full-auto). */
+export function squirtShot(): void {
+  noiseBurst(2100, 1.6, 0.09, 0.18, 900);
+  blip(340, 180, 0.06, 0.08, 'triangle');
+}
+
+/** The tower planting — a big chunky plastic KACHUNK and a settle glug. */
+export function placeTower(): void {
+  blip(220, 70, 0.16, 0.4, 'square');
+  noiseBurst(600, 1.0, 0.3, 0.2, 200);
+  setTimeout(() => blip(140, 320, 0.25, 0.16), 180);
+}
+
+/** An enemy winding up — a rising squeak so you HEAR the telegraph. */
+export function enemyWindup(): void {
+  blip(380, 760, 0.22, 0.09, 'triangle');
+}
+
+/** A hit landing on the tower — hollow plastic boom, bad news. */
+export function towerHit(): void {
+  blip(140, 60, 0.22, 0.32, 'sine');
+  noiseBurst(500, 1.1, 0.2, 0.18, 160);
+}
+
+/** The tower going down — a long deflating groan under a splash. */
+export function towerDown(): void {
+  blip(300, 40, 1.2, 0.4, 'sawtooth');
+  noiseBurst(600, 0.6, 1.2, 0.28, 90);
+}
+
 /** An enemy lobbing paint at you — a hollow, sinister underarm whoop. */
 export function enemyLob(): void {
   blip(300, 620, 0.16, 0.1, 'sine');

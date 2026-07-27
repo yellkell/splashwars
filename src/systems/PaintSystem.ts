@@ -37,8 +37,9 @@ import {
 } from '../fx/paint.js';
 import { initDamageNumbers, popDamage, updateDamageNumbers } from '../fx/damageNumbers.js';
 import { ballDamage, damagePlayer, run, UpgradeId } from '../game/run.js';
+import { damageTower, tower } from '../game/tower.js';
 import * as sfx from '../audio/sfx.js';
-import { AOE, ARENA_BOUNDS, ENEMY_SHOT, PISTOL } from '../config.js';
+import { AOE, ARENA_BOUNDS, ENEMY_SHOT, PISTOL, TOWER } from '../config.js';
 import { Quaternion } from 'three';
 
 const _pos = new Vector3();
@@ -103,12 +104,24 @@ export class PaintSystem extends createSystem({}) {
       let hit = false;
 
       if (hostile) {
-        // --- Their paint vs your head. ---
+        // --- Their paint vs your head… ---
         if (_pos.distanceToSquared(_head) <= ENEMY_SHOT.hitRadius * ENEMY_SHOT.hitRadius) {
           dropletBurst(_pos, 10, 1.1);
           if (damagePlayer(9)) sfx.playerDown();
           else sfx.playerHurt();
           hit = true;
+        }
+        // --- …and vs the tower (a fat cylinder around its frame). ---
+        if (!hit && tower.placed) {
+          const tdx = this.px[i] - tower.pos.x;
+          const tdz = this.pz[i] - tower.pos.z;
+          const rr = TOWER.radius + ENEMY_SHOT.radius;
+          if (tdx * tdx + tdz * tdz <= rr * rr && this.py[i] <= TOWER.height) {
+            dropletBurst(_pos, 8, 0.9);
+            sfx.towerHit();
+            damageTower(11);
+            hit = true;
+          }
         }
       } else {
         // --- Your paint vs the swarm, via the grid. ---

@@ -18,6 +18,7 @@ import { CanvasTexture, LinearFilter, Mesh, MeshBasicMaterial, PlaneGeometry } f
 import { CardBoard } from '../ui/cardBoard.js';
 import { app } from '../game/appState.js';
 import { resetRun, run } from '../game/run.js';
+import { resetTower, tower } from '../game/tower.js';
 import { EnemySystem } from './EnemySystem.js';
 import * as sfx from '../audio/sfx.js';
 
@@ -36,22 +37,31 @@ export class MenuSystem extends createSystem({}) {
     this.buildPlate();
   }
 
-  /** Start (or restart) a run — also the dev hook's entry point. */
+  /**
+   * Start (or restart) a run. If the tower is already planted (AGAIN after
+   * a wipe) we keep its spot and go straight to the fight; from the title
+   * we go to PLACING first — plant the tower, then the waves come.
+   */
   startRun(): void {
     resetRun();
-    app.phase = 'playing';
     this.board.hide();
     this.plate.visible = false;
     this.shownFor = '';
-    this.world.getSystem(EnemySystem)?.startFresh();
-    sfx.waveHorn();
+    if (tower.placed) {
+      resetTower();
+      app.phase = 'playing';
+      this.world.getSystem(EnemySystem)?.startFresh();
+      sfx.waveHorn();
+    } else {
+      app.phase = 'placing';
+    }
   }
 
   update(delta: number): void {
     // Show/refresh the board when the phase asks for one.
     if (app.phase === 'title' && this.shownFor !== 'title') this.showTitle();
     if (app.phase === 'gameover' && this.shownFor !== 'gameover') this.showGameOver();
-    if (app.phase === 'playing' && this.shownFor !== '') {
+    if ((app.phase === 'playing' || app.phase === 'placing') && this.shownFor !== '') {
       this.board.hide();
       this.plate.visible = false;
       this.shownFor = '';
@@ -112,6 +122,9 @@ export class MenuSystem extends createSystem({}) {
         onPick: (id) => {
           if (id === 'again') this.startRun();
           else {
+            // Back to the title: the tower comes up too, so a fresh run
+            // gets a fresh placement.
+            tower.placed = false;
             app.phase = 'title';
             this.shownFor = '';
           }
@@ -159,14 +172,14 @@ export class MenuSystem extends createSystem({}) {
       ctx.fillText('HOW TO PLAY', W / 2, 82);
       ctx.font = '700 40px system-ui, sans-serif';
       ctx.fillStyle = '#4d6b76';
-      ctx.fillText('SQUEEZE GRIP at your hip — draw a pistol', W / 2, 165);
-      ctx.fillText('PULL TRIGGER — paint them before they reach you', W / 2, 230);
-      ctx.fillText('RELEASE GRIP — throw the gun, it bursts; a fresh', W / 2, 295);
-      ctx.fillText('one respawns on your hip. The tank IS your ammo.', W / 2, 352);
+      ctx.fillText('PLACE THE TOWER — it is what they want. Guard it.', W / 2, 165);
+      ctx.fillText('SQUEEZE GRIP at your hip — draw a pistol', W / 2, 230);
+      ctx.fillText('PULL TRIGGER — one ball per press, make them count', W / 2, 295);
+      ctx.fillText('RELEASE GRIP — throw the gun; a fresh one respawns', W / 2, 352);
     } else {
       ctx.fillStyle = '#e0312e';
       ctx.font = '900 72px system-ui, -apple-system, sans-serif';
-      ctx.fillText('WIPED OUT', W / 2, 92);
+      ctx.fillText(run.endReason === 'tower' ? 'TOWER SOAKED' : 'WIPED OUT', W / 2, 92);
       ctx.fillStyle = '#2b3a44';
       ctx.font = '800 52px system-ui, sans-serif';
       ctx.fillText(`WAVE ${Math.max(1, run.wave)}`, W / 2 - 300, 210);

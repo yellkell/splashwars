@@ -281,6 +281,13 @@ export class Swarm {
   readonly alive = new Uint8Array(MAX_ENEMIES);
   readonly cooldown = new Float32Array(MAX_ENEMIES);
   readonly hitPulse = new Float32Array(MAX_ENEMIES);
+  /**
+   * Attack telegraph animation, 1 → 0 (see ENEMY.attackDuration). While
+   * non-zero the instance rears back, SNAPS toward its target, and
+   * recovers — commit() renders it, EnemySystem lands the damage exactly
+   * at the snap. 0 = not attacking.
+   */
+  readonly attackAnim = new Float32Array(MAX_ENEMIES);
   readonly strafeDir = new Int8Array(MAX_ENEMIES);
   /** This slot's instance index inside its kind's mesh. */
   private readonly local = new Int32Array(MAX_ENEMIES);
@@ -327,6 +334,7 @@ export class Swarm {
     this.alive[slot] = 1;
     this.cooldown[slot] = Math.random() * def.attackInterval;
     this.hitPulse[slot] = 0;
+    this.attackAnim[slot] = 0;
     this.strafeDir[slot] = Math.random() < 0.5 ? -1 : 1;
     this.local[slot] = li;
 
@@ -372,15 +380,45 @@ export class Swarm {
     this.grid.query(x, z, radius, out);
   }
 
-  /** Push the current state into the instance buffers. Once per frame. */
-  commit(time: number): void {
+  /**
+   * Push the current state into the instance buffers. Once per frame.
+   * (tx, tz) is the tower — attack lunges aim at it.
+   */
+  commit(time: number, tx: number, tz: number): void {
     for (let i = 0; i < MAX_ENEMIES; i++) {
       if (!this.alive[i]) continue;
       const block = this.blocks[this.kind[i] as EnemyKindId];
       const r = this.radius[i];
       const pulse = this.hitPulse[i];
-      const wob = 1 + Math.sin(time * 40 + this.phase[i]) * 0.18 * pulse;
+      let wob = 1 + Math.sin(time * 40 + this.phase[i]) * 0.18 * pulse;
+
+      // --- The attack telegraph: rear back, SNAP forward, recover. ---
+      let lunge = 0;
+      const a = this.attackAnim[i];
+      if (a > 0) {
+        if (a > 0.6) {
+          const t = (1 - a) / 0.4; // windup: crouch and rear back
+          lunge = -0.4 * t;
+          wob *= 1 - 0.22 * t;
+        } else if (a > 0.35) {
+          const t = (0.6 - a) / 0.25; // strike: snap at the target
+          lunge = -0.4 + 1.5 * t;
+          wob *= 0.78 + 0.5 * t;
+        } else {
+          const t = (0.35 - a) / 0.35; // recover: ease home
+          lunge = 1.1 * (1 - t);
+          wob *= 1.28 - 0.28 * t;
+        }
+      }
+
       _p.set(this.px[i], this.py[i], this.pz[i]);
+      if (lunge !== 0) {
+        const ddx = tx - this.px[i];
+        const ddz = tz - this.pz[i];
+        const dd = Math.hypot(ddx, ddz) || 1;
+        _p.x += (ddx / dd) * lunge * r;
+        _p.z += (ddz / dd) * lunge * r;
+      }
       _s.set(r * (2 - wob), r * wob * 1.08, r * (2 - wob));
       _q.setFromAxisAngle(UP, this.facing[i]);
       _m.compose(_p, _q, _s);

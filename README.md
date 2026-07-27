@@ -1,18 +1,19 @@
 # SPLASH WARS 🔫💦
 
-Wave-survival paint fighting in WebXR passthrough. A sleek white-and-red
-sports water pistol riding each hip, a pool-deck platform under your feet,
-and squads of runaway pool toys bobbing in across your real room —
-striped beach balls, squirt droplets, knotted water balloons, inflatable
-ducks. Squeeze your grip near a holster to **draw**, then pull the trigger — it fires on
-that very frame, no charge-up, no spin-up. It's analog, so a light squeeze
-lobs lazily and a full pull volleys, and fat cricket-ball orbs of
-bubblegum-magenta paint arc out and land with a wet plop — on the floor
-as layered splats, on the enemies as creeping coverage. Paint a toy
-completely and it pops in a shower of droplets. The balls fly Blaston-slow —
-much slower than real projectiles, but quick enough that you'd have to dodge
-one — because that's the game's shared projectile language for when enemies
-and bosses start shooting back.
+Tower-defense paint fighting in WebXR passthrough. A ghost LIFEGUARD TOWER
+follows your gaze across your real floor — pull the trigger and it PLANTS,
+and every wave of runaway pool toys that follows comes for IT: striped
+beach balls bouncing in, squirt droplets zigzagging, knotted water balloons
+lobbing from range, inflatable ducks bulldozing straight at it. You are the
+defense: a sleek white-and-red sports water pistol rides each hip. Squeeze
+your grip near a holster to **draw**, then pull the trigger — SEMI-AUTO,
+one fat cricket-ball orb of bubblegum-magenta paint per press, on that very
+frame. Paint lands as layered splats on your real floor and as creeping
+coverage on the toys; cover one completely and it pops. Every attack is
+TELEGRAPHED: a toy rears back, crouches, and SNAPS at the tower — the hit
+lands exactly at the snap, and popping it mid-windup cancels the attack.
+The balls fly Blaston-slow — quick enough that you'd have to dodge one —
+because that's the shared projectile language of enemy return fire too.
 
 The hero piece is the **tank**: every pistol has a frosted blow-moulded tank
 on top and you can SEE the paint sloshing inside — a Half-Life: Alyx-style liquid whose
@@ -21,7 +22,10 @@ when you jolt it. That liquid **is** the ammo, one unified system: fire and
 the level visibly drains; run dry and you get a sad dribble and plastic
 clicks. **There is no refill** — a tank is a magazine, and **throwing the
 spent gun away is the reload**, because a fresh full one respawns on your
-hip. No gauge, no HUD — the water is the UI.
+hip. The tower reads the same way: enemy hits soak it in THEIR violet
+paint, so the purpler it gets, the closer you are to losing. No gauge, no
+HUD — the paint is the UI, on your guns, on the toys, on the tower, on
+your visor.
 
 Where FIRE FIGHT (iron-balls-boxing) was metal — gunmetal, hazard amber,
 anvil clangs — SPLASH WARS is **plastic aesthetics and beautiful water**:
@@ -47,10 +51,11 @@ no models, no textures, no sounds shipped.
   opaque paint, so the liquid reads as a solid volume rather than a glass
   box. Fill level = ammo; a held trigger drains the tank in ~2.6 s and it
   does not come back on its own.
-- **Fat, slow paint balls** — cricket-ball-sized orbs at 4.5/s, lobbed at
-  Blaston speeds: slow enough to watch fly, fast enough to have to dodge.
-  The first ball leaves the barrel the instant you pull. Enemy return fire
-  speaks the same visual language.
+- **Semi-auto, then AUTO SOAKER** — one ball per trigger press, landing on
+  the frame you pull; the tank is a 14-ball magazine. The AUTO SOAKER
+  upgrade unlocks hold-to-fire and each stack cranks the cadence 35%.
+  Balls fly at Blaston speeds — slow enough to watch, fast enough to have
+  to dodge — and enemy return fire speaks the same language.
 - **Damage numbers** — white digits with thick black outlines popping off
   every hit (bigger and gold for blasts), drawn from one instanced digit
   atlas so hundreds of hit markers cost a single draw call.
@@ -64,9 +69,10 @@ no models, no textures, no sounds shipped.
   half-painted toys still cost six draw calls. A uniform spatial grid keeps
   ball-vs-enemy and blast queries near-constant instead of
   O(balls x enemies).
-- **The pool-toy roster** — the creative direction: everything that
-  attacks you escaped from a pool inflatables crate, each a silhouette you
-  read across the room. **Bobbers** (striped beach balls, the crowd),
+- **The pool-toy roster** — everything that attacks the tower escaped from
+  a pool inflatables crate, each with its own silhouette AND its own way of
+  moving: Bobbers bounce in pulses, Squirts dart in zigzags, Slingers
+  waddle and sway, Big Ducks plow dead straight. **Bobbers** (striped beach balls, the crowd),
   **Squirts** (water droplets, fast, one-hit pops), **Slingers** (knotted
   water balloons lobbing paint from range), **Big Ducks** (inflatable pool
   ducks, the tanks), **Foamers** (bubble clumps that burst into Squirts),
@@ -79,10 +85,15 @@ no models, no textures, no sounds shipped.
 - **Health without a HUD** — damage throws paint across your **visor**; it
   thickens as you weaken and washes off as you recover. Same philosophy as
   the ammo: read the paint, not a number.
+- **Place the tower to start** — shooting START hands you a pulsing cyan
+  ghost of the lifeguard tower that glides across the real floor wherever
+  you look; either trigger plants it (a plastic KACHUNK) and wave one rolls
+  in. AGAIN after a wipe keeps your spot; MENU takes the tower up for a
+  fresh placement.
 - **Menus you shoot** — the game has exactly one interaction verb. The
   title screen is a HOW TO PLAY plate over a big START card: draw and shoot
-  it to begin. Death brings a WIPED OUT plate (wave / pops / score) with
-  AGAIN and MENU cards. Between waves, three upgrade cards swing up and you
+  it to begin. Losing brings a WIPED OUT / TOWER SOAKED plate (wave / pops
+  / score) with AGAIN and MENU cards. Between waves, three upgrade cards swing up and you
   **hose the one you want** — about three balls, well under a second. Heavy
   Paint (damage), Orbiters (vampire-survivors globes that grind anything
   they touch), Buoyancy (max health + full heal), Paint Bomb (thrown

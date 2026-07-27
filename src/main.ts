@@ -12,15 +12,17 @@
 
 import { SessionMode, World } from '@iwsdk/core';
 import { setupEnvironment } from './arena/environment.js';
-import { buildPlatform } from './arena/platform.js';
+import { buildStage } from './arena/platform.js';
 import { WeaponSystem } from './systems/WeaponSystem.js';
 import { PaintSystem } from './systems/PaintSystem.js';
 import { EnemySystem } from './systems/EnemySystem.js';
 import { UpgradeSystem } from './systems/UpgradeSystem.js';
 import { PlayerSystem } from './systems/PlayerSystem.js';
 import { MenuSystem } from './systems/MenuSystem.js';
+import { TowerSystem } from './systems/TowerSystem.js';
 import { run } from './game/run.js';
 import { app } from './game/appState.js';
+import { tower as towerState } from './game/tower.js';
 import { WaterPistol } from './components/WaterPistol.js';
 import { debugLiveDigits, debugNumbersInstance, popDamage } from './fx/damageNumbers.js';
 import { Vector3 as DebugVec3 } from 'three';
@@ -51,7 +53,7 @@ World.create(container, {
   },
 }).then((world) => {
   setupEnvironment(world);
-  buildPlatform(world);
+  buildStage(world);
 
   // Order matters: the swarm must exist before anything queries it, pistols
   // feed the paint bus before the sim drains it, and the paint sim applies
@@ -59,6 +61,7 @@ World.create(container, {
   world.registerSystem(EnemySystem);
   world.registerSystem(UpgradeSystem);
   world.registerSystem(MenuSystem);
+  world.registerSystem(TowerSystem);
   world.registerSystem(WeaponSystem);
   world.registerSystem(PaintSystem);
   world.registerSystem(PlayerSystem);
@@ -85,6 +88,14 @@ World.create(container, {
       },
       digits: () => debugLiveDigits(),
       startGame: () => world.getSystem(MenuSystem)?.startRun(),
+      placeTower: (x = 0, z = -1.5) =>
+        world.getSystem(TowerSystem)?.place(new DebugVec3(x, 0, z)),
+      towerState: () => ({
+        placed: towerState.placed,
+        health: Math.round(towerState.health),
+        soaked: +towerState.soaked.toFixed(3),
+        pos: [+towerState.pos.x.toFixed(2), +towerState.pos.z.toFixed(2)],
+      }),
       appPhase: () => app.phase,
       pistols: () => {
         const ws = world.getSystem(WeaponSystem);
