@@ -83,8 +83,8 @@ export class MenuSystem extends createSystem({}) {
         {
           id: 'start',
           title: 'START',
-          blurb: 'Ten waves. One deck. Two pistols.',
-          effectLine: 'SPLASH!',
+          blurb: 'Ten waves of THE THIRST. One tower of juice.',
+          effectLine: 'JUICE UP!',
           color: '#f0299b',
           scale: 1.25,
         },
@@ -106,7 +106,7 @@ export class MenuSystem extends createSystem({}) {
         {
           id: 'again',
           title: 'AGAIN',
-          blurb: 'Back on the deck, tanks full',
+          blurb: 'Same spot, fresh reservoir',
           color: '#1fc4c9',
         },
         {
@@ -172,14 +172,14 @@ export class MenuSystem extends createSystem({}) {
       ctx.fillText('HOW TO PLAY', W / 2, 82);
       ctx.font = '700 40px system-ui, sans-serif';
       ctx.fillStyle = '#4d6b76';
-      ctx.fillText('PLACE THE TOWER — it is what they want. Guard it.', W / 2, 165);
+      ctx.fillText('PLACE THE JUICE TOWER — THE THIRST wants it drained', W / 2, 165);
       ctx.fillText('SQUEEZE GRIP at your hip — draw a pistol', W / 2, 230);
       ctx.fillText('PULL TRIGGER — one ball per press, make them count', W / 2, 295);
       ctx.fillText('RELEASE GRIP — throw the gun; a fresh one respawns', W / 2, 352);
     } else {
       ctx.fillStyle = '#e0312e';
       ctx.font = '900 72px system-ui, -apple-system, sans-serif';
-      ctx.fillText(run.endReason === 'tower' ? 'TOWER SOAKED' : 'WIPED OUT', W / 2, 92);
+      ctx.fillText(run.endReason === 'tower' ? 'TOWER DRAINED' : 'WIPED OUT', W / 2, 92);
       ctx.fillStyle = '#2b3a44';
       ctx.font = '800 52px system-ui, sans-serif';
       ctx.fillText(`WAVE ${Math.max(1, run.wave)}`, W / 2 - 300, 210);
@@ -187,7 +187,7 @@ export class MenuSystem extends createSystem({}) {
       ctx.fillText(`${run.score} PTS`, W / 2 + 300, 210);
       ctx.fillStyle = '#7c8a94';
       ctx.font = '700 36px system-ui, sans-serif';
-      ctx.fillText('the deck is repainted, the toys are refilled…', W / 2, 320);
+      ctx.fillText('the reservoir refills, THE THIRST regroups…', W / 2, 320);
     }
     this.plateTex.needsUpdate = true;
   }

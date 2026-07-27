@@ -1,19 +1,19 @@
 /**
  * The liquid — SPLASH WARS' centrepiece trick, Half-Life: Alyx style.
  *
- * The paint inside a pistol tank is one mesh (a slightly-shrunk copy of the
+ * The juice inside a pistol tank is one mesh (a slightly-shrunk copy of the
  * tank interior) whose fragment shader CLIPS everything above a liquid
  * surface plane defined in WORLD space. Because the plane lives in world
  * space, the surface stays level however you tilt, swing or roll the gun —
  * exactly the Alyx bottle illusion. Where the clip cuts the mesh open you see
- * its back faces, which we paint as a flat bright "surface of the liquid"
+ * its back faces, which we juice as a flat bright "surface of the liquid"
  * colour — the classic cheap fake for the liquid's top.
  *
  * On top of that:
  *  - a spring–damper SloshSim tilts the plane's normal in response to how the
- *    hand accelerates, so whipping the gun sends the paint surging;
+ *    hand accelerates, so whipping the gun sends the juice surging;
  *  - a travelling ripple wobbles the plane, scaled by slosh energy;
- *  - a foam/meniscus band brightens the cut line where paint meets air;
+ *  - a foam/meniscus band brightens the cut line where juice meets air;
  *  - the FILL LEVEL is a uniform driven straight from the weapon's ammo —
  *    the tank visibly drains as you fire. One unified system.
  */
@@ -47,7 +47,7 @@ export class SloshSim {
 
   update(dt: number, accel: Vector3): void {
     const s = PISTOL.slosh;
-    // Surface tips away from the direction of acceleration (paint lags the
+    // Surface tips away from the direction of acceleration (juice lags the
     // tank), pulled level by the spring, calmed by damping.
     const driveX = -accel.x * s.accelGain;
     const driveZ = -accel.z * s.accelGain;
@@ -89,7 +89,7 @@ const LIQUID_FRAG = /* glsl */ `
   uniform vec3 uPlaneNormal;  // world up, tilted by the slosh sim
   uniform float uTime;
   uniform float uSlosh;       // ripple energy 0..~1
-  uniform vec3 uColor;        // lit paint body
+  uniform vec3 uColor;        // lit juice body
   uniform vec3 uDeepColor;    // shadowed depths
   uniform vec3 uFoamColor;    // meniscus / surface sheen
   varying vec3 vWorldPos;
@@ -97,7 +97,7 @@ const LIQUID_FRAG = /* glsl */ `
 
   void main(){
     // Signed distance above the (tilted) surface plane, wobbled by two
-    // crossing travelling ripples so churned paint visibly rolls.
+    // crossing travelling ripples so churned juice visibly rolls.
     float ripple =
       sin(dot(vWorldPos.xz, vec2(38.0, 26.0)) - uTime * 13.0) * 0.5 +
       sin(dot(vWorldPos.xz, vec2(-22.0, 31.0)) + uTime * 9.0) * 0.5;
@@ -113,20 +113,20 @@ const LIQUID_FRAG = /* glsl */ `
       return;
     }
 
-    // The body of the paint: simple fixed-key shading so it reads THICK —
+    // The body of the juice: simple fixed-key shading so it reads THICK —
     // deep colour below, lit colour up top.
     float up = clamp(vWorldNormal.y * 0.5 + 0.5, 0.0, 1.0);
     vec3 col = mix(uDeepColor, uColor, up * 0.75 + 0.25);
     // Meniscus: a foam band hugging the underside of the surface plane.
     col = mix(col, uFoamColor, smoothstep(-0.010, -0.002, d) * 0.85);
     // Wet gloss: a real Blinn-Phong glint off a fixed key light, tracking
-    // the camera, so the paint gleams as the tank turns in your hand.
+    // the camera, so the juice gleams as the tank turns in your hand.
     vec3 n = normalize(vWorldNormal);
     vec3 lightDir = normalize(vec3(0.35, 0.85, 0.4));
     vec3 viewDir = normalize(cameraPosition - vWorldPos);
     float spec = pow(max(dot(n, normalize(lightDir + viewDir)), 0.0), 80.0);
     col += spec * 0.85;
-    // FULLY OPAQUE: thick paint is not see-through. Anything less and you
+    // FULLY OPAQUE: thick juice is not see-through. Anything less and you
     // catch the tank's far wall (and the room) straight through the liquid.
     gl_FragColor = vec4(col, 1.0);
   }
@@ -150,7 +150,7 @@ const _point = new Vector3();
 
 export function createLiquid(
   interiorGeo: BufferGeometry,
-  paint: ColorRepresentation,
+  juice: ColorRepresentation,
   deep: ColorRepresentation,
   foam: ColorRepresentation,
 ): LiquidVisual {
@@ -160,7 +160,7 @@ export function createLiquid(
       uPlaneNormal: { value: new Vector3(0, 1, 0) },
       uTime: { value: 0 },
       uSlosh: { value: 0 },
-      uColor: { value: new Color(paint) },
+      uColor: { value: new Color(juice) },
       uDeepColor: { value: new Color(deep) },
       uFoamColor: { value: new Color(foam) },
     },

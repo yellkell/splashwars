@@ -14,7 +14,7 @@ import { SessionMode, World } from '@iwsdk/core';
 import { setupEnvironment } from './arena/environment.js';
 import { buildStage } from './arena/platform.js';
 import { WeaponSystem } from './systems/WeaponSystem.js';
-import { PaintSystem } from './systems/PaintSystem.js';
+import { JuiceSystem } from './systems/JuiceSystem.js';
 import { EnemySystem } from './systems/EnemySystem.js';
 import { UpgradeSystem } from './systems/UpgradeSystem.js';
 import { PlayerSystem } from './systems/PlayerSystem.js';
@@ -56,14 +56,14 @@ World.create(container, {
   buildStage(world);
 
   // Order matters: the swarm must exist before anything queries it, pistols
-  // feed the paint bus before the sim drains it, and the paint sim applies
+  // feed the juice bus before the sim drains it, and the juice sim applies
   // hits before the wave director resolves deaths and area damage.
   world.registerSystem(EnemySystem);
   world.registerSystem(UpgradeSystem);
   world.registerSystem(MenuSystem);
   world.registerSystem(TowerSystem);
   world.registerSystem(WeaponSystem);
-  world.registerSystem(PaintSystem);
+  world.registerSystem(JuiceSystem);
   world.registerSystem(PlayerSystem);
 
   // Dev-only inspection hook: lets the browser console (and the headless

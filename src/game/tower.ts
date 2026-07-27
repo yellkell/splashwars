@@ -1,6 +1,6 @@
 /**
  * The tower's shared state — what the whole fight is about. Module singleton
- * like `run`: EnemySystem drives attacks into it, PaintSystem tests enemy
+ * like `run`: EnemySystem drives attacks into it, JuiceSystem tests enemy
  * shots against it, TowerSystem renders it, MenuSystem reports on it.
  */
 
@@ -16,7 +16,7 @@ export const tower = {
   maxHealth: TOWER.maxHealth,
   /** Seconds of hit-wobble remaining (drives the visual shake). */
   hitFlash: 0,
-  /** 0..1 — how much enemy paint covers it. This IS its health readout. */
+  /** 0..1 — how much enemy juice covers it. This IS its health readout. */
   get soaked(): number {
     return 1 - Math.max(0, this.health) / this.maxHealth;
   },

@@ -12,7 +12,7 @@
  *    and it clicks. Throwing the spent gun and drawing the fresh one off
  *    your hip IS the reload.
  *  - FLYING: release the grip and the whole gun is THROWN — it tumbles with
- *    your hand's velocity, paint sloshing wildly (the world-space liquid
+ *    your hand's velocity, juice sloshing wildly (the world-space liquid
  *    plane keeps working mid-tumble, which sells it).
  *  - The instant it hits the floor or an enemy it BURSTS — dumping its
  *    remaining tank as coverage if it hit a toy — and disappears; a fresh
@@ -27,8 +27,8 @@ import { createSystem, InputComponent, Quaternion, Vector3, type Entity } from '
 import { PistolState, WaterPistol } from '../components/WaterPistol.js';
 import { EnemySystem } from './EnemySystem.js';
 import { createWaterPistol, type WaterPistolRig } from '../weapons/waterPistol.js';
-import { requestBlast, squirtBlob } from '../combat/paintBus.js';
-import { dropletBurst, stampSplat } from '../fx/paint.js';
+import { requestBlast, squirtBlob } from '../combat/juiceBus.js';
+import { dropletBurst, stampSplat } from '../fx/juice.js';
 import { pulseHand } from '../input/haptics.js';
 import { run, UpgradeId } from '../game/run.js';
 import { app } from '../game/appState.js';
@@ -220,7 +220,7 @@ export class WeaponSystem extends createSystem({
     rig.setTriggerPull(Math.max(pull, pressed ? 1 : 0));
 
     // While the tower ghost is out, the trigger is the PLACE button — don't
-    // also squirt paint over the spot you're choosing.
+    // also squirt juice over the spot you're choosing.
     if (app.phase === 'placing') return;
 
     let ammo = e.getValue(WaterPistol, 'ammo') ?? 1;
@@ -314,7 +314,7 @@ export class WeaponSystem extends createSystem({
       }
     }
 
-    // The floor — the gun shatters into paint the moment it lands.
+    // The floor — the gun shatters into juice the moment it lands.
     if (pos.y <= 0.05) {
       _e.set(pos.x, 0, pos.z);
       stampSplat(_e, 0.22 + ammo * 0.18);
@@ -324,10 +324,10 @@ export class WeaponSystem extends createSystem({
     return false;
   }
 
-  /** The gun disappears in a paint burst; a fresh one is due on the hip. */
+  /** The gun disappears in a juice burst; a fresh one is due on the hip. */
   private burst(e: Entity, rig: WaterPistolRig, pos: Vector3, ammo: number, punch: number): void {
-    // PAINT BOMB: with the upgrade, a thrown gun detonates in a wave of
-    // paint that guts whatever is packed around it.
+    // JUICE BOMB: with the upgrade, a thrown gun detonates in a wave of
+    // juice that guts whatever is packed around it.
     const blastStacks = run.stacks[UpgradeId.ThrowBlast];
     if (blastStacks > 0) {
       const radius = AOE.throwRadius + AOE.throwRadiusPerStack * (blastStacks - 1);
@@ -335,7 +335,7 @@ export class WeaponSystem extends createSystem({
       requestBlast(pos, radius, damage, true);
       dropletBurst(pos, 44, 2.4);
       stampSplat(_e.set(pos.x, 0, pos.z), radius * 0.9);
-      sfx.paintBomb();
+      sfx.juiceBomb();
     }
     dropletBurst(pos, Math.round(14 + ammo * 22), punch);
     sfx.gunBurst();
@@ -376,7 +376,7 @@ export class WeaponSystem extends createSystem({
     }
   }
 
-  // --- One paint ball. -----------------------------------------------------
+  // --- One juice ball. -----------------------------------------------------
 
   /** Squirt one ball from the nozzle. `power` scales speed (sputter < 1). */
   private fireBlob(

@@ -1,13 +1,13 @@
 /**
  * You: health, the visor read, the orbiting globes, and death.
  *
- * There is no health bar. Taking a hit throws PAINT ACROSS YOUR VISOR — a
+ * There is no health bar. Taking a hit throws JUICE ACROSS YOUR VISOR — a
  * camera-locked splat plane that thickens as you get hurt and washes off as
  * you recover. Your health is legible the same way the pistol's ammo is
- * legible: by looking at the paint, not at a number.
+ * legible: by looking at the juice, not at a number.
  *
  * This system also runs ORBITERS — the vampire-survivors passive. Each stack
- * adds a globe of your own paint circling you; anything they sweep through
+ * adds a globe of your own juice circling you; anything they sweep through
  * takes damage on a per-enemy cooldown, so a wall of Scurriers melts as it
  * closes rather than instantly evaporating.
  */
@@ -24,10 +24,10 @@ import {
   Group,
 } from 'three';
 import { EnemySystem } from './EnemySystem.js';
-import { wetPaint } from '../materials/plastic.js';
+import { wetJuice } from '../materials/plastic.js';
 import { run, UpgradeId } from '../game/run.js';
 import { app } from '../game/appState.js';
-import { dropletBurst } from '../fx/paint.js';
+import { dropletBurst } from '../fx/juice.js';
 import * as sfx from '../audio/sfx.js';
 import { ORBITALS, PALETTE, PLAYER } from '../config.js';
 
@@ -35,7 +35,7 @@ const _pos = new Vector3();
 const _globePos = new Vector3();
 const _near: number[] = [];
 
-/** A camera-locked splat texture — paint thrown across your view. */
+/** A camera-locked splat texture — juice thrown across your view. */
 function visorTexture(): CanvasTexture {
   const size = 512;
   const canvas = document.createElement('canvas');
@@ -78,7 +78,7 @@ export class PlayerSystem extends createSystem({}) {
     // The visor plane rides the camera, just in front of the near plane.
     this.visorMat = new MeshBasicMaterial({
       map: visorTexture(),
-      color: PALETTE.paint,
+      color: PALETTE.juice,
       transparent: true,
       opacity: 0,
       depthTest: false,
@@ -106,7 +106,7 @@ export class PlayerSystem extends createSystem({}) {
     const target = Math.min(1, wounded * 0.85 + run.hurt * 0.5);
     this.visorMat.opacity += (target - this.visorMat.opacity) * Math.min(1, delta * 6);
 
-    // --- Death: a beat under the paint, then the game-over board. ---
+    // --- Death: a beat under the juice, then the game-over board. ---
     if (run.dead) {
       run.deathTimer -= delta;
       if (run.deathTimer <= 0 && app.phase === 'playing') {
@@ -131,7 +131,7 @@ export class PlayerSystem extends createSystem({}) {
     while (this.globes.length < wanted) {
       const globe = new Mesh(
         new SphereGeometry(ORBITALS.globeRadius, 14, 12),
-        wetPaint(PALETTE.paint),
+        wetJuice(PALETTE.juice),
       );
       this.globes.push(globe);
       this.orbitGroup.add(globe);

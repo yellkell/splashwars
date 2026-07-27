@@ -1,13 +1,13 @@
 /**
  * Damage numbers — white digits with thick black outlines that pop off every
- * hit, so you can read your damage as text as well as feel it in the paint.
+ * hit, so you can read your damage as text as well as feel it in the juice.
  *
  * Built for swarm scale: a canvas atlas of the ten digits is rendered once,
  * and every digit of every live number is an instance of ONE quad mesh. A
  * hundred simultaneous hit markers is still one draw call and zero per-frame
  * allocation. Instances billboard to the camera, rise, and fade out.
  *
- * Crits (big hits) come up larger and tinted, so a Paint Bomb detonation
+ * Crits (big hits) come up larger and tinted, so a Juice Bomb detonation
  * reads differently from a chip hit at a glance.
  */
 
@@ -41,7 +41,7 @@ const _c = new Color();
 
 /**
  * Render 0-9 into a 10-cell strip: fat white glyphs with a heavy black
- * outline so they stay legible against paint, plastic or passthrough.
+ * outline so they stay legible against juice, plastic or passthrough.
  */
 function digitAtlas(): CanvasTexture {
   const cellW = 96;

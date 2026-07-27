@@ -3,8 +3,8 @@
  * primitives so it ships with zero assets. The look is SLEEK SPORTS KIT:
  * competition-white moulded shell with racing-red accents — red stripes down
  * the flanks, red trigger and guard, red nozzle collar — and smoked details,
- * like paintball gear designed by a running-shoe brand. The hero piece is
- * still the clear blow-moulded tank on top with the paint VISIBLY sloshing
+ * like juiceball gear designed by a running-shoe brand. The hero piece is
+ * still the clear blow-moulded tank on top with the juice VISIBLY sloshing
  * inside (materials/liquid.ts).
  *
  * Local frame matches the XR grip space: -Z is forward, origin sits inside
@@ -133,7 +133,7 @@ export function createWaterPistol(): WaterPistolRig {
   guard.position.set(0, 0.006, -0.058);
   group.add(guard);
 
-  // --- THE TANK: clear shell on top, paint sloshing inside. ---
+  // --- THE TANK: clear shell on top, juice sloshing inside. ---
   const tankR = 0.034;
   const tankLen = 0.1;
   const innerR = 0.031;
@@ -142,10 +142,10 @@ export function createWaterPistol(): WaterPistolRig {
   tankGroup.position.set(0, 0.118, -0.05);
   group.add(tankGroup);
 
-  // The paint: a shrunk interior capsule wearing the clipped-liquid shader.
+  // The juice: a shrunk interior capsule wearing the clipped-liquid shader.
   const interior = new CapsuleGeometry(innerR, innerLen, 6, 18);
   interior.rotateX(Math.PI / 2);
-  const liquid = createLiquid(interior, PALETTE.paint, PALETTE.paintDeep, PALETTE.paintFoam);
+  const liquid = createLiquid(interior, PALETTE.juice, PALETTE.juiceDeep, PALETTE.juiceFoam);
   tankGroup.add(liquid.mesh);
 
   // The clear blow-moulded shell over it.

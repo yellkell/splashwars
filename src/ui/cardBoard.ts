@@ -2,7 +2,7 @@
  * CardBoard — the game's ONE menu primitive.
  *
  * A row of frosted plastic cards floating in front of you, and you choose
- * by SHOOTING the one you want: paint accumulates on the card face and once
+ * by SHOOTING the one you want: juice accumulates on the card face and once
  * coverage passes the threshold, that card is picked. No laser pointers, no
  * ray-and-click, no wrist menus — the menu speaks the same verb as the rest
  * of the game, which is what makes it feel like a VR-native product rather
@@ -10,7 +10,7 @@
  *
  * Used by UpgradeSystem (the between-wave choices) and MenuSystem (title
  * screen, game over). Every shown board registers itself in `activeBoards`,
- * and PaintSystem tests live paint balls against every active board — so a
+ * and JuiceSystem tests live juice balls against every active board — so a
  * menu card is hit by exactly the same projectiles that pop enemies.
  */
 
@@ -24,7 +24,7 @@ import {
   Vector3,
   type Scene,
 } from 'three';
-import { dropletBurst } from '../fx/paint.js';
+import { dropletBurst } from '../fx/juice.js';
 import * as sfx from '../audio/sfx.js';
 import { UPGRADES } from '../config.js';
 
@@ -56,7 +56,7 @@ interface Card {
   splats: { x: number; y: number; r: number }[];
 }
 
-/** Every board currently on screen — PaintSystem tests balls against these. */
+/** Every board currently on screen — JuiceSystem tests balls against these. */
 export const activeBoards = new Set<CardBoard>();
 
 const _local = new Vector3();
@@ -119,7 +119,7 @@ export class CardBoard {
     }
   }
 
-  /** Test a paint ball; true consumes the ball (it splatted on a card). */
+  /** Test a juice ball; true consumes the ball (it splatted on a card). */
   testHit(pos: Vector3, radius: number): boolean {
     if (!this.board.visible) return false;
     for (const card of this.cards) {
@@ -133,7 +133,7 @@ export class CardBoard {
         _local.y >= -halfH - radius &&
         _local.y <= halfH + radius
       ) {
-        this.paintCard(card, _local.x / card.w + 0.5, 0.5 - _local.y / card.h);
+        this.juiceCard(card, _local.x / card.w + 0.5, 0.5 - _local.y / card.h);
         dropletBurst(pos, 7, 0.8);
         sfx.hitSplat();
         return true;
@@ -174,7 +174,7 @@ export class CardBoard {
     return card;
   }
 
-  private paintCard(card: Card, u: number, v: number): void {
+  private juiceCard(card: Card, u: number, v: number): void {
     // Fat splats: a card falls to ~3 balls — picking is a beat, not a chore.
     card.splats.push({
       x: u * CARD_PX_W,
@@ -185,7 +185,7 @@ export class CardBoard {
     card.fill = Math.min(1, area / (CARD_PX_W * CARD_PX_H) / 1.35);
     this.drawCard(card);
 
-    if (card.fill >= UPGRADES.paintToPick) {
+    if (card.fill >= UPGRADES.juiceToPick) {
       const id = card.spec.id;
       const pick = this.onPick;
       this.hide();
@@ -247,7 +247,7 @@ export class CardBoard {
     ctx.font = '800 30px system-ui, sans-serif';
     ctx.fillText('SHOOT TO PICK', W / 2, H - 62);
 
-    // The paint the player has already landed, with a wet highlight per splat.
+    // The juice the player has already landed, with a wet highlight per splat.
     for (const s of card.splats) {
       ctx.fillStyle = '#f0299b';
       ctx.beginPath();
@@ -270,7 +270,7 @@ export class CardBoard {
     ctx.fillStyle = 'rgba(0,0,0,0.15)';
     ctx.fillRect(40, H - 34, W - 80, 14);
     ctx.fillStyle = '#f0299b';
-    ctx.fillRect(40, H - 34, (W - 80) * Math.min(1, fill / UPGRADES.paintToPick), 14);
+    ctx.fillRect(40, H - 34, (W - 80) * Math.min(1, fill / UPGRADES.juiceToPick), 14);
 
     card.tex.needsUpdate = true;
   }

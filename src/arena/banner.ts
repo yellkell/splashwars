@@ -1,6 +1,6 @@
 /**
  * The "SPLASH WARS" title sign — a rounded bubbly plastic plate floating out
- * over the water line, dripping paint. Pure canvas texture, no assets.
+ * over the water line, dripping juice. Pure canvas texture, no assets.
  */
 
 import {
@@ -41,19 +41,19 @@ export function createTitleBanner(scene: Scene): Mesh {
   ctx.strokeStyle = '#8fdfe8';
   ctx.stroke();
 
-  // Title: SPLASH in paint magenta with drips, WARS in water aqua.
+  // Title: SPLASH in juice magenta with drips, WARS in water aqua.
   const font = '900 150px system-ui, -apple-system, sans-serif';
   ctx.font = font;
-  const paint = ctx.createLinearGradient(0, 90, 0, 230);
-  paint.addColorStop(0, '#ff7ec9');
-  paint.addColorStop(1, '#f0299b');
-  ctx.fillStyle = paint;
+  const juice = ctx.createLinearGradient(0, 90, 0, 230);
+  juice.addColorStop(0, '#ff7ec9');
+  juice.addColorStop(1, '#f0299b');
+  ctx.fillStyle = juice;
   ctx.shadowColor = 'rgba(240,41,155,0.55)';
   ctx.shadowBlur = 24;
   ctx.fillText('SPLASH', W / 2, 165);
   ctx.shadowBlur = 0;
 
-  // Paint drips running off the word.
+  // Juice drips running off the word.
   ctx.fillStyle = '#f0299b';
   for (const [dx, len, r] of [[-215, 66, 13], [-90, 108, 16], [40, 52, 11], [172, 88, 14]] as const) {
     const x = W / 2 + dx;

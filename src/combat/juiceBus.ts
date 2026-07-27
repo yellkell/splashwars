@@ -1,7 +1,7 @@
 /**
  * A tiny module bus between the combat systems (the same pattern as FIRE
  * FIGHT's opponentBus): producers push events, consumers drain them each
- * frame. Keeps WeaponSystem, PaintSystem and EnemySystem decoupled and the
+ * frame. Keeps WeaponSystem, JuiceSystem and EnemySystem decoupled and the
  * spawn paths allocation-free at steady state.
  */
 
@@ -12,12 +12,12 @@ export interface BlobSpawn {
   vel: Vector3;
 }
 
-/** Player paint balls squirted this frame, awaiting the paint sim. */
+/** Player juice balls squirted this frame, awaiting the juice sim. */
 export const pendingBlobs: BlobSpawn[] = [];
 
 const spare: BlobSpawn[] = [];
 
-/** Queue a paint ball (recycles spawn records). */
+/** Queue a juice ball (recycles spawn records). */
 export function squirtBlob(pos: Vector3, vel: Vector3): void {
   const s = spare.pop() ?? { pos: new Vector3(), vel: new Vector3() };
   s.pos.copy(pos);
@@ -30,7 +30,7 @@ export function recycleSpawn(s: BlobSpawn): void {
   spare.push(s);
 }
 
-/** Enemy return fire queued by EnemySystem, flown by PaintSystem. */
+/** Enemy return fire queued by EnemySystem, flown by JuiceSystem. */
 export const pendingEnemyShots: BlobSpawn[] = [];
 
 export function enemyShot(pos: Vector3, vel: Vector3): void {
@@ -41,7 +41,7 @@ export function enemyShot(pos: Vector3, vel: Vector3): void {
 }
 
 /**
- * Area damage requests (splash from balls, blasts from thrown pistols).
+ * Area damage requests (bursts from balls, blasts from thrown pistols).
  * EnemySystem owns the swarm, so it applies these.
  */
 export interface BlastRequest {

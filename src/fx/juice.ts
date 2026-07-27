@@ -1,13 +1,13 @@
 /**
- * The paint. Everything that makes the paint read THICK and weighty:
+ * The juice. Everything that makes the juice read THICK and weighty:
  *
- *  - blob pool: one InstancedMesh of glossy tennis-ball-sized paint orbs,
+ *  - blob pool: one InstancedMesh of glossy tennis-ball-sized juice orbs,
  *    each slightly stretched along its velocity so it wobbles like a thrown
  *    water balloon rather than reading as a rigid marble;
- *  - splat pool: a ring buffer of flat splat decals stamped where paint
+ *  - splat pool: a ring buffer of flat splat decals stamped where juice
  *    lands, each a randomly-rotated, randomly-scaled blobby canvas splat;
- *  - droplet pool: opaque round particles (NORMAL blending — paint is
- *    opaque, unlike fire) that burst off impacts and painted enemies.
+ *  - droplet pool: opaque round particles (NORMAL blending — juice is
+ *    opaque, unlike fire) that burst off impacts and juiced enemies.
  *
  * All pooled, all instanced, zero allocations at runtime — cheap in stereo.
  */
@@ -31,7 +31,7 @@ import {
   Vector3,
   type Scene,
 } from 'three';
-import { wetPaint } from '../materials/plastic.js';
+import { wetJuice } from '../materials/plastic.js';
 import { ENEMY_SHOT, PALETTE, PISTOL } from '../config.js';
 
 const _m = new Matrix4();
@@ -48,21 +48,21 @@ const _c = new Color();
 
 export const MAX_BLOBS = 256;
 
-/** GPU-side rendering of every blob; CPU state lives in PaintSystem. */
+/** GPU-side rendering of every blob; CPU state lives in JuiceSystem. */
 export class BlobPool {
   readonly mesh: InstancedMesh;
 
   constructor() {
     const geo = new SphereGeometry(PISTOL.blobRadius, 12, 10);
-    const mat = wetPaint(PALETTE.paint);
+    const mat = wetJuice(PALETTE.juice);
     this.mesh = new InstancedMesh(geo, mat, MAX_BLOBS);
     this.mesh.instanceMatrix.setUsage(DynamicDrawUsage);
     this.mesh.frustumCulled = false;
     this.mesh.count = MAX_BLOBS;
-    // Enemy fire is tinted per instance so incoming paint reads instantly
+    // Enemy fire is tinted per instance so incoming juice reads instantly
     // as theirs, not yours.
     for (let i = 0; i < MAX_BLOBS; i++) {
-      _c.set(PALETTE.paint);
+      _c.set(PALETTE.juice);
       this.mesh.setColorAt(i, _c);
     }
     // Park everything at zero scale until a blob claims the slot.
@@ -84,7 +84,7 @@ export class BlobPool {
     _s.set(size / Math.sqrt(stretch), size / Math.sqrt(stretch), size * stretch);
     _m.compose(pos, _q, _s);
     this.mesh.setMatrixAt(i, _m);
-    _c.set(hostile ? ENEMY_SHOT.tint : PALETTE.paint);
+    _c.set(hostile ? ENEMY_SHOT.tint : PALETTE.juice);
     this.mesh.setColorAt(i, _c);
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
   }
@@ -144,7 +144,7 @@ function splatTexture(): CanvasTexture {
   return new CanvasTexture(canvas);
 }
 
-/** Flat paint stamps on the floor/deck; a ring buffer so old paint recycles. */
+/** Flat juice stamps on the floor/deck; a ring buffer so old juice recycles. */
 export class SplatPool {
   readonly mesh: InstancedMesh;
   private cursor = 0;
@@ -169,9 +169,9 @@ export class SplatPool {
     this.mesh.count = MAX_SPLATS;
     _m.makeScale(0, 0, 0);
     for (let i = 0; i < MAX_SPLATS; i++) this.mesh.setMatrixAt(i, _m);
-    // Slightly varied paint shades per stamp read as wet layered coats.
+    // Slightly varied juice shades per stamp read as wet layered coats.
     for (let i = 0; i < MAX_SPLATS; i++) {
-      _c.set(PALETTE.paint).offsetHSL(0, 0, (Math.random() - 0.5) * 0.08);
+      _c.set(PALETTE.juice).offsetHSL(0, 0, (Math.random() - 0.5) * 0.08);
       this.mesh.setColorAt(i, _c);
     }
   }
@@ -193,7 +193,7 @@ export class SplatPool {
 // Droplet particles.
 // ---------------------------------------------------------------------------
 
-/** Opaque paint droplets — ring-buffer point pool, normal blending. */
+/** Opaque juice droplets — ring-buffer point pool, normal blending. */
 class DropletPool {
   readonly points: Points;
   private readonly geo: BufferGeometry;
@@ -236,7 +236,7 @@ class DropletPool {
           vec2 d = gl_PointCoord - 0.5; float r = length(d);
           if(r>0.5) discard;
           // Hard round droplet with a wet catchlight up-left — thick
-          // glossy paint, not glowing spray.
+          // glossy juice, not glowing spray.
           float lit = 0.85 + 0.3 * max(0.0, -d.y * 2.0);
           float spec = smoothstep(0.16, 0.0, length(d + vec2(0.14, -0.14))) * 0.9;
           gl_FragColor = vec4(vColor * lit + spec, smoothstep(0.5, 0.42, r)); }
@@ -252,7 +252,7 @@ class DropletPool {
   spawn(p: Vector3, vx: number, vy: number, vz: number, life: number, size: number): void {
     const i = this.cursor;
     this.cursor = (this.cursor + 1) % this.max;
-    _c.set(PALETTE.paint).offsetHSL(0, 0, (Math.random() - 0.5) * 0.1);
+    _c.set(PALETTE.juice).offsetHSL(0, 0, (Math.random() - 0.5) * 0.1);
     this.pos[i * 3] = p.x; this.pos[i * 3 + 1] = p.y; this.pos[i * 3 + 2] = p.z;
     this.vel[i * 3] = vx; this.vel[i * 3 + 1] = vy; this.vel[i * 3 + 2] = vz;
     this.col[i * 3] = _c.r; this.col[i * 3 + 1] = _c.g; this.col[i * 3 + 2] = _c.b;
@@ -264,7 +264,7 @@ class DropletPool {
   update(dt: number): void {
     for (let i = 0; i < this.max; i++) {
       if (this.life[i] <= 0) continue;
-      this.vel[i * 3 + 1] -= 5.5 * dt; // droplets fall like paint, not sparks
+      this.vel[i * 3 + 1] -= 5.5 * dt; // droplets fall like juice, not sparks
       this.pos[i * 3] += this.vel[i * 3] * dt;
       this.pos[i * 3 + 1] += this.vel[i * 3 + 1] * dt;
       this.pos[i * 3 + 2] += this.vel[i * 3 + 2] * dt;
@@ -287,7 +287,7 @@ let splatPool: SplatPool | undefined;
 let dropletPool: DropletPool | undefined;
 
 /** Create the shared pools and add them to the scene. Call once at boot. */
-export function initPaintPools(scene: Scene): { blobs: BlobPool; splats: SplatPool } {
+export function initJuicePools(scene: Scene): { blobs: BlobPool; splats: SplatPool } {
   if (!blobPool) {
     blobPool = new BlobPool();
     splatPool = new SplatPool();
@@ -297,12 +297,12 @@ export function initPaintPools(scene: Scene): { blobs: BlobPool; splats: SplatPo
   return { blobs: blobPool, splats: splatPool! };
 }
 
-/** Integrate droplets. Call once per frame (PaintSystem does). */
-export function updatePaintPools(dt: number): void {
+/** Integrate droplets. Call once per frame (JuiceSystem does). */
+export function updateJuicePools(dt: number): void {
   dropletPool?.update(dt);
 }
 
-/** Stamp a floor splat directly (thrown guns burst outside PaintSystem). */
+/** Stamp a floor splat directly (thrown guns burst outside JuiceSystem). */
 export function stampSplat(pos: Vector3, size: number): void {
   splatPool?.stamp(pos, size);
 }

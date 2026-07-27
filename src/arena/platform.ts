@@ -1,7 +1,7 @@
 /**
  * The stage — lighting and signage only. There is no platform any more:
  * the game is played wherever you PLACE THE TOWER in your real room
- * (see systems/TowerSystem.ts), so the floor is your floor, and paint
+ * (see systems/TowerSystem.ts), so the floor is your floor, and juice
  * lands straight on it as splat decals.
  *
  * What's left here is the look: bright poolside key light, soft sky fill,

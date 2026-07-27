@@ -1,19 +1,19 @@
 /**
- * SPLASH WARS tunables — the game is a wave-survival paint fight: you stand
- * on a plastic pool-deck platform while waves of toy enemies close in, and
- * you hose them down with water pistols full of thick, vivid paint. Numbers
- * the gameplay feel depends on live here so they are easy to find and adjust.
- * Dimensions are in metres.
+ * SPLASH WARS tunables — tower-defense juice fighting: you plant a JUICE
+ * TOWER in your real room, and waves of THE THIRST — parched, faceted
+ * husk-creatures — come to drain it while you hose them down with pistols
+ * full of thick, vivid juice. Numbers the gameplay feel depends on live
+ * here so they are easy to find and adjust. Dimensions are in metres.
  *
  * The fantasy: a chunky plastic super-soaker in each hand with a transparent
- * tank on top — you can SEE the paint sloshing inside (Half-Life: Alyx style
+ * tank on top — you can SEE the juice sloshing inside (Half-Life: Alyx style
  * liquid), and the liquid in the tank IS your ammo. Fire and the level drops.
  * There is no refill — when a tank runs dry you throw the gun away and draw a
  * fresh one off your hip. One unified system: what you see is what you have.
  *
- * Where FIRE FIGHT was metal — gunmetal, hazard amber, anvil clangs — SPLASH
- * WARS is plastic and beautiful water: glossy toy shells, pastel decks,
- * squirts, plops and glugs.
+ * Where FIRE FIGHT was metal — gunmetal, hazard amber, anvil clangs —
+ * SPLASH WARS is glossy plastic and beautiful liquid against dry, cracked
+ * husks: squirts, plops and glugs versus dust.
  */
 
 export const GAME_TITLE = 'SPLASH WARS';
@@ -22,8 +22,9 @@ export const GAME_TITLE = 'SPLASH WARS';
  * THE TOWER — what the whole fight is about. To start a run you PLACE it:
  * a ghost lifeguard tower follows your gaze across the real floor, you pull
  * the trigger, and it plants there. Every wave then comes for the tower,
- * not for you — you are the defense. Enemy hits soak it in THEIR paint;
- * read its health by how purple it's getting. Fully soaked = run over.
+ * not for you — you are the defense. Its health is the JUICE LEVEL visibly
+ * standing in its reservoir: every hit drains it a little (that is what
+ * THE THIRST is here for). Empty tank = TOWER DRAINED = run over.
  */
 export const TOWER = {
   radius: 0.34, // collision footprint the toys mob
@@ -49,7 +50,7 @@ export const PISTOL = {
   // reload, which is what makes the holster loop the ammo economy.
   shotsPerTank: 14,
 
-  // The balls. Chunky paint orbs, Blaston-slow: MUCH slower than real
+  // The balls. Chunky juice orbs, Blaston-slow: MUCH slower than real
   // projectiles but quick enough that you'd have to dodge one — this is the
   // game's shared projectile language, so enemy return fire reads the same.
   muzzleSpeed: 7.2, // launch speed (m/s) — snappier, still readable in flight
@@ -88,9 +89,9 @@ export const AUTO = {
 /**
  * The hip holsters — one pistol rides each hip. Reach down, squeeze the GRIP
  * to draw; release the grip to throw the whole gun. A thrown pistol tumbles
- * (paint sloshing all the way), bursts on whatever it hits — floor or enemy —
+ * (juice sloshing all the way), bursts on whatever it hits — floor or enemy —
  * and a fresh one respawns on your hip a beat later. Throwing a full tank at
- * an enemy dumps the whole tank's paint on it at once.
+ * an enemy dumps the whole tank's juice on it at once.
  */
 export const HOLSTER = {
   /**
@@ -108,7 +109,7 @@ export const HOLSTER = {
   respawnDelay: 1.2, // seconds after a throw before the fresh gun appears
   throwBoost: 1.15, // hand velocity multiplier on release
   minThrowSpeed: 1.2, // a limp drop still clears your platform edge
-  throwGravity: 5.5, // guns are heavier than paint balls
+  throwGravity: 5.5, // guns are heavier than juice balls
   throwSpin: 9, // rad/s tumble in flight — the tank sloshes wildly
   hitRadius: 0.14, // the gun's collision radius vs enemies
   // Damage a direct hit deals, scaled by how full the thrown tank was — a
@@ -116,7 +117,7 @@ export const HOLSTER = {
   throwDamage: 220,
 };
 
-/** Where paint may fly: a generous invisible cage around the arena. */
+/** Where juice may fly: a generous invisible cage around the arena. */
 export const ARENA_BOUNDS = {
   radius: 14, // blobs beyond this are culled
   ceiling: 8,
@@ -176,19 +177,19 @@ export const ENEMY = {
  * clump of foam bubbles, and a giant crowned duck for the boss.
  *
  * `attack` is damage dealt to YOU: melee toys on contact at the deck rim,
- * ranged toys by throwing a paint ball at you from range.
+ * ranged toys by throwing a juice ball at you from range.
  *
  * Balance: tuned soft. PISTOL.damage is 40, so a Squirt is one clean hit,
  * a Bobber two, a Slinger three — the swarm is a mowing fantasy, and the
  * threat comes from volume and the Big Ducks, not from bullet sponges.
  */
 export const EnemyKind = {
-  Drifter: 0, // "Bobber" — striped beach ball, slow, arrives in crowds
-  Scurrier: 1, // "Squirt" — water droplet, quick, one-hit pop
-  Lobber: 2, // "Slinger" — knotted water balloon, throws paint from range
-  Brute: 3, // "Big Duck" — inflatable pool duck, big, tanky, hits hard
-  Splitter: 4, // "Foamer" — bubble clump that bursts into Squirts
-  Boss: 5, // "THE BIG ONE" — the wave-10 crowned colossus duck
+  Drifter: 0, // "Husk" — parched crystal boulder, the crowd
+  Scurrier: 1, // "Skitter" — small spiked shard, fast, one-hit pop
+  Lobber: 2, // "Spitter" — leaning obelisk that lobs from range
+  Brute: 3, // "Clod" — rubble golem, big, tanky, hits hard
+  Splitter: 4, // "Cluster" — shard aggregate that bursts into Skitters
+  Boss: 5, // "THE DROUGHT" — the wave-10 crowned monolith
 } as const;
 export type EnemyKindId = (typeof EnemyKind)[keyof typeof EnemyKind];
 
@@ -197,9 +198,9 @@ export interface EnemyTypeDef {
   radius: number;
   hp: number;
   speed: number; // multiplier on the wave's base speed
-  tint: number; // unpainted shell colour
-  accent: number; // beaks, knots, fins, crowns (vertex-role accent)
-  stripes?: number; // beach-ball shader stripes (segment count)
+  tint: number; // dry crust colour (before your juice covers it)
+  accent: number; // darker crust: spikes, plates, the boss's crown
+  glow: number; // the eyes' emissive colour
   attack: number; // damage per hit on the player
   attackInterval: number; // seconds between its attacks
   ranged: boolean; // true = throws at you instead of touching you
@@ -210,35 +211,36 @@ export interface EnemyTypeDef {
 
 export const ENEMY_TYPES: Record<EnemyKindId, EnemyTypeDef> = {
   [EnemyKind.Drifter]: {
-    name: 'Bobber', radius: 0.19, hp: 72, speed: 1, tint: 0xff6b57,
-    accent: 0xf7f9fc, stripes: 6,
+    name: 'Husk', radius: 0.19, hp: 72, speed: 1, tint: 0xcfc4b0,
+    accent: 0x8a7f6c, glow: 0xffb03f,
     attack: 3, attackInterval: 2.0, ranged: false, score: 10,
   },
   [EnemyKind.Scurrier]: {
-    name: 'Squirt', radius: 0.12, hp: 34, speed: 2.05, tint: 0x53c8ec,
-    accent: 0x2a9dc9,
+    name: 'Skitter', radius: 0.12, hp: 34, speed: 2.05, tint: 0xb8bfd0,
+    accent: 0x707a91, glow: 0x9ff2ff,
     attack: 2, attackInterval: 1.5, ranged: false, score: 15,
   },
   [EnemyKind.Lobber]: {
-    name: 'Slinger', radius: 0.22, hp: 110, speed: 0.72, tint: 0xb9a8ff,
-    accent: 0x7c66d9,
-    attack: 5, attackInterval: 3.0, ranged: true, score: 25,
+    // The ranged threat — deliberately SOFT: it chips, it doesn't shell.
+    name: 'Spitter', radius: 0.22, hp: 90, speed: 0.72, tint: 0x9a8fb8,
+    accent: 0x5f5480, glow: 0x7b5cff,
+    attack: 3, attackInterval: 4.4, ranged: true, score: 25,
   },
   [EnemyKind.Brute]: {
-    name: 'Big Duck', radius: 0.36, hp: 300, speed: 0.5, tint: 0xffd23f,
-    accent: 0xff8a2a,
+    name: 'Clod', radius: 0.36, hp: 300, speed: 0.5, tint: 0x93998f,
+    accent: 0x5c6158, glow: 0xffb03f,
     attack: 9, attackInterval: 2.2, ranged: false, score: 50,
   },
   [EnemyKind.Splitter]: {
-    name: 'Foamer', radius: 0.26, hp: 120, speed: 0.85, tint: 0xdff3f8,
-    accent: 0xaeddec,
+    name: 'Cluster', radius: 0.26, hp: 120, speed: 0.85, tint: 0xd9d2c4,
+    accent: 0x9a917e, glow: 0xff8a5c,
     attack: 4, attackInterval: 2.0, ranged: false,
     splitInto: EnemyKind.Scurrier, splitCount: 4, score: 30,
   },
   [EnemyKind.Boss]: {
-    name: 'THE BIG ONE', radius: 0.75, hp: 3600, speed: 0.34, tint: 0xffb03f,
-    accent: 0xe0312e,
-    attack: 12, attackInterval: 2.0, ranged: true, score: 500,
+    name: 'THE DROUGHT', radius: 0.75, hp: 3600, speed: 0.34, tint: 0x6e6459,
+    accent: 0x3f3831, glow: 0xff4d3d,
+    attack: 8, attackInterval: 2.6, ranged: true, score: 500,
   },
 };
 
@@ -247,19 +249,22 @@ export const ENEMY_TYPES: Record<EnemyKindId, EnemyTypeDef> = {
  * fight gets more varied as well as bigger.
  */
 export const WAVE_ROSTER: EnemyKindId[][] = [
+  // Weighted draws: duplicates raise a kind's share of the wave. Spitters
+  // (ranged) are kept to roughly a fifth of any squad — a wall of ranged
+  // chip damage was unanswerable and unfun.
   [EnemyKind.Drifter], // 1
   [EnemyKind.Drifter, EnemyKind.Scurrier], // 2
-  [EnemyKind.Drifter, EnemyKind.Scurrier, EnemyKind.Lobber], // 3
-  [EnemyKind.Drifter, EnemyKind.Scurrier, EnemyKind.Lobber], // 4
-  [EnemyKind.Drifter, EnemyKind.Scurrier, EnemyKind.Splitter, EnemyKind.Lobber], // 5
-  [EnemyKind.Scurrier, EnemyKind.Splitter, EnemyKind.Lobber, EnemyKind.Brute], // 6
-  [EnemyKind.Drifter, EnemyKind.Scurrier, EnemyKind.Lobber, EnemyKind.Brute], // 7
-  [EnemyKind.Scurrier, EnemyKind.Splitter, EnemyKind.Brute, EnemyKind.Lobber], // 8
-  [EnemyKind.Scurrier, EnemyKind.Splitter, EnemyKind.Brute, EnemyKind.Lobber], // 9
-  [EnemyKind.Boss], // 10 — plus a trickle of adds
+  [EnemyKind.Drifter, EnemyKind.Drifter, EnemyKind.Scurrier, EnemyKind.Lobber], // 3
+  [EnemyKind.Drifter, EnemyKind.Scurrier, EnemyKind.Scurrier, EnemyKind.Lobber], // 4
+  [EnemyKind.Drifter, EnemyKind.Scurrier, EnemyKind.Splitter, EnemyKind.Splitter, EnemyKind.Lobber], // 5
+  [EnemyKind.Scurrier, EnemyKind.Splitter, EnemyKind.Brute, EnemyKind.Brute, EnemyKind.Lobber], // 6
+  [EnemyKind.Drifter, EnemyKind.Drifter, EnemyKind.Scurrier, EnemyKind.Brute, EnemyKind.Lobber], // 7
+  [EnemyKind.Scurrier, EnemyKind.Splitter, EnemyKind.Brute, EnemyKind.Brute, EnemyKind.Lobber], // 8
+  [EnemyKind.Scurrier, EnemyKind.Scurrier, EnemyKind.Splitter, EnemyKind.Brute, EnemyKind.Lobber], // 9
+  [EnemyKind.Boss], // 10
 ];
 
-/** You. Paint splashed on your visor is the damage read; it fades as you heal. */
+/** You. Juice splashed on your visor is the damage read; it fades as you heal. */
 export const PLAYER = {
   maxHealth: 100,
   regenDelay: 4, // seconds without a hit before you start recovering
@@ -277,17 +282,19 @@ export const PLAYER = {
 
 /** Enemy return fire — the same slow, dodgeable ball language as yours. */
 export const ENEMY_SHOT = {
-  speed: 4.2,
+  speed: 3.9,
   gravity: 2.4,
   radius: 0.075,
   lifetime: 4,
   hitRadius: 0.34, // how close to your head counts as a hit
+  damagePlayer: 5, // a Spitter lob that catches your head
+  damageTower: 6, // a Spitter lob that lands on the tower
   tint: 0x7b5cff,
 };
 
 /**
  * Upgrades — between every wave you're offered three at random and you PICK
- * BY SHOOTING the one you want (no menus in VR: paint the card you want).
+ * BY SHOOTING the one you want (no menus in VR: juice the card you want).
  * Each can stack; `max` caps the stack.
  */
 export const UPGRADES = {
@@ -298,10 +305,10 @@ export const UPGRADES = {
   cardHeightY: 1.45,
   // Deliberately low: a card should fall to two or three balls. Picking an
   // upgrade is a beat between waves, not a chore.
-  paintToPick: 0.18, // fraction of a card you must cover to choose it (~3 balls)
+  juiceToPick: 0.18, // fraction of a card you must cover to choose it (~3 balls)
 };
 
-/** Orbital paint globes — the vampire-survivors passive. */
+/** Orbital juice globes — the vampire-survivors passive. */
 export const ORBITALS = {
   radius: 0.85, // orbit radius around you
   height: 1.05,
@@ -313,9 +320,9 @@ export const ORBITALS = {
 
 /** Splash + explosion tuning for the AOE upgrades. */
 export const AOE = {
-  splashRadius: 0.55, // paint-ball splash radius at stack 1
-  splashRadiusPerStack: 0.22,
-  splashFraction: 0.45, // fraction of direct damage dealt in the splash
+  burstRadius: 0.55, // juice-ball splash radius at stack 1
+  burstRadiusPerStack: 0.22,
+  burstFraction: 0.45, // fraction of direct damage dealt in the splash
   throwRadius: 1.1, // thrown-pistol explosion radius at stack 0
   throwRadiusPerStack: 0.5,
   throwDamage: 120, // thrown-pistol explosion damage at stack 0
@@ -323,19 +330,19 @@ export const AOE = {
 };
 
 /**
- * Plastic-and-water palette. Player paint is bubblegum magenta — thick,
+ * Plastic-and-water palette. Player juice is bubblegum magenta — thick,
  * glossy, unmistakably yours. The world is pastel poolside plastic.
  */
 export const PALETTE = {
-  paint: 0xf0299b, // your paint — bubblegum magenta
-  paintDeep: 0xa50f66, // shadowed depths of the same paint
-  paintFoam: 0xffb8df, // meniscus/foam line where paint meets air
+  juice: 0xf0299b, // your juice — bubblegum magenta
+  juiceDeep: 0xa50f66, // shadowed depths of the same juice
+  juiceFoam: 0xffb8df, // meniscus/foam line where juice meets air
   sportWhite: 0xf7f9fc, // pistol shell — competition white
   sportRed: 0xe0312e, // racing-red accents: stripes, trigger, nozzle
   sportSmoke: 0x39424b, // smoked details: grip inlay, nozzle bore
   deckWhite: 0xf7f4ec, // pool-deck plastic
   deckAqua: 0x8fdfe8, // deck rim tube
-  enemyShell: 0xe8f6f8, // unpainted enemy plastic
+  enemyShell: 0xe8f6f8, // unjuiced enemy plastic
   water: 0x5ecfe0, // beautiful-water accents / sky tint
   sky: 0xcfeef7,
   charcoal: 0x22303a, // fallback clear colour (non-AR)

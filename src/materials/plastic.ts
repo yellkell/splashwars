@@ -8,11 +8,11 @@
 import { MeshPhysicalMaterial, MeshStandardMaterial, type ColorRepresentation } from 'three';
 
 /**
- * WET PAINT — the glossiest thing in the game. Paint balls, orbiter globes,
- * anything that reads as fresh liquid paint: near-zero roughness under a
+ * WET JUICE — the glossiest thing in the game. Juice balls, orbiter globes,
+ * anything that reads as fresh liquid juice: near-zero roughness under a
  * tight clearcoat, so every light in the scene leaves a hot little glint.
  */
-export function wetPaint(color: ColorRepresentation): MeshPhysicalMaterial {
+export function wetJuice(color: ColorRepresentation): MeshPhysicalMaterial {
   return new MeshPhysicalMaterial({
     color,
     roughness: 0.05,
@@ -43,7 +43,7 @@ export function mattePlastic(color: ColorRepresentation): MeshStandardMaterial {
  * shell shows every seam of the liquid mesh and reads as an empty glass box;
  * frosting it — rough base under a glossy clearcoat, milky white, a bit more
  * opacity — scatters the surface just enough to sell "there is real liquid in
- * here" while still letting the paint level read at a glance.
+ * here" while still letting the juice level read at a glance.
  *
  * No physical transmission (far too heavy in stereo WebXR) — the frost plus
  * the opaque liquid inside does the whole job.

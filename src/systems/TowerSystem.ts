@@ -1,152 +1,82 @@
 /**
- * The lifeguard tower — placement, rendering, damage, destruction.
+ * THE JUICE TOWER — placement, rendering, damage, destruction.
  *
  * PLACEMENT: after you shoot START, a translucent cyan GHOST of the tower
  * glides across your real floor wherever you look ("place the tower in the
  * middle of your play space"). Pull either trigger and it plants: the ghost
- * solidifies into the real tower, the horn sounds, wave one rolls in.
+ * solidifies, the horn sounds, wave one rolls in.
  *
- * THE TOWER is what every toy attacks. It's a little plastic lifeguard
- * chair — four legs, a platform, a seat with a back, a red-and-white
- * umbrella — in the same competition white/red kit as your pistols. Enemy
- * hits soak it in THEIR violet paint via a noise-masked paint shell (the
- * same drip-down trick the toys use), so its health is legible at a glance
- * with no HUD: the purpler it gets, the closer you are to losing. Hits
- * also wobble it; destruction bursts it and ends the run.
+ * THE TOWER is a water-tower silhouette in the pistols' white/red sports
+ * kit: four legs up to a big FROSTED RESERVOIR with a red cap — and inside
+ * the reservoir you can SEE the juice. That liquid IS the tower's health,
+ * the same unified system as the pistol tanks: THE THIRST hits it and the
+ * level visibly drops (they are draining it), the surface sloshing with
+ * every strike. Empty tank = TOWER DRAINED = run over. No gauge anywhere.
  */
 
 import { createSystem, InputComponent, Vector3 } from '@iwsdk/core';
 import {
-  Color,
   Group,
   Mesh,
   MeshBasicMaterial,
+  Object3D,
   RingGeometry,
-  ShaderMaterial,
   BoxGeometry,
   ConeGeometry,
   CylinderGeometry,
+  TorusGeometry,
   type BufferGeometry,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { glossyPlastic } from '../materials/plastic.js';
+import { clearPlastic, glossyPlastic } from '../materials/plastic.js';
+import { createLiquid, type LiquidVisual } from '../materials/liquid.js';
 import { app } from '../game/appState.js';
 import { resetTower, tower } from '../game/tower.js';
 import { run } from '../game/run.js';
 import { EnemySystem } from './EnemySystem.js';
-import { dropletBurst, stampSplat } from '../fx/paint.js';
+import { dropletBurst, stampSplat } from '../fx/juice.js';
 import * as sfx from '../audio/sfx.js';
-import { ENEMY_SHOT, PALETTE, TOWER } from '../config.js';
+import { PALETTE, TOWER } from '../config.js';
 
 const _fwd = new Vector3();
 const _head = new Vector3();
 const _spot = new Vector3();
+const _tank = new Vector3();
+const _still = new Vector3(); // zero accel — the tower doesn't get waved about
 
 const HANDS = ['left', 'right'] as const;
 
-/** All the tower's parts as one merged geometry (for ghost + paint shell). */
+// Reservoir proportions (tower-local; the group sits on the floor).
+const TANK_R = 0.3;
+const TANK_H = 0.52;
+const TANK_Y = 0.88; // centre height of the reservoir
+
+/** The whole silhouette as one merged geometry (for the ghost). */
 function towerGeometry(): BufferGeometry {
   const parts: BufferGeometry[] = [];
-  const add = (geo: BufferGeometry, x: number, y: number, z: number, rx = 0): void => {
-    if (rx) geo.rotateX(rx);
+  const add = (geo: BufferGeometry, x: number, y: number, z: number): void => {
     geo.translate(x, y, z);
     parts.push(geo);
   };
-  // Four legs.
-  for (const [lx, lz] of [[-0.22, -0.22], [0.22, -0.22], [-0.22, 0.22], [0.22, 0.22]] as const) {
-    add(new CylinderGeometry(0.03, 0.035, 0.62, 10), lx, 0.31, lz);
+  for (const [lx, lz] of [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]] as const) {
+    add(new CylinderGeometry(0.028, 0.036, 0.66, 10), lx, 0.33, lz);
   }
-  // Platform, seat, seat back.
-  add(new BoxGeometry(0.58, 0.05, 0.58), 0, 0.65, 0);
-  add(new BoxGeometry(0.4, 0.07, 0.34), 0, 0.72, 0.05);
-  add(new BoxGeometry(0.4, 0.3, 0.06), 0, 0.88, 0.2);
-  // Umbrella: pole + canopy.
-  add(new CylinderGeometry(0.018, 0.018, 0.62, 8), 0.16, 1.0, -0.12);
-  add(new ConeGeometry(0.42, 0.22, 12), 0.16, TOWER.height - 0.08, -0.12);
+  add(new BoxGeometry(0.5, 0.05, 0.5), 0, 0.62, 0);
+  add(new CylinderGeometry(TANK_R, TANK_R, TANK_H, 18), 0, TANK_Y, 0);
+  add(new ConeGeometry(TANK_R * 1.12, 0.24, 18), 0, TANK_Y + TANK_H / 2 + 0.1, 0);
   return mergeGeometries(parts)!;
 }
-
-/** The real tower: white/red plastic, part by part. */
-function buildTower(): Group {
-  const g = new Group();
-  const white = glossyPlastic(PALETTE.sportWhite, 0.2);
-  const red = glossyPlastic(PALETTE.sportRed, 0.25);
-  const add = (geo: BufferGeometry, mat: typeof white, x: number, y: number, z: number): Mesh => {
-    const m = new Mesh(geo, mat);
-    m.position.set(x, y, z);
-    g.add(m);
-    return m;
-  };
-  for (const [lx, lz] of [[-0.22, -0.22], [0.22, -0.22], [-0.22, 0.22], [0.22, 0.22]] as const) {
-    add(new CylinderGeometry(0.03, 0.035, 0.62, 10), white, lx, 0.31, lz);
-  }
-  add(new BoxGeometry(0.58, 0.05, 0.58), white, 0, 0.65, 0);
-  add(new BoxGeometry(0.4, 0.07, 0.34), red, 0, 0.72, 0.05);
-  add(new BoxGeometry(0.4, 0.3, 0.06), red, 0, 0.88, 0.2);
-  add(new CylinderGeometry(0.018, 0.018, 0.62, 8), white, 0.16, 1.0, -0.12);
-  // Red-and-white striped canopy: a red cone with white panel wedges.
-  add(new ConeGeometry(0.42, 0.22, 12), red, 0.16, TOWER.height - 0.08, -0.12);
-  const panels = new Mesh(new ConeGeometry(0.425, 0.215, 6), white);
-  panels.position.set(0.16, TOWER.height - 0.078, -0.12);
-  g.add(panels);
-  return g;
-}
-
-/** The violet coverage shell: enemy paint dripping down the tower. */
-const SHELL_FRAG = /* glsl */ `
-  uniform float uSoaked;
-  uniform vec3 uPaint;
-  uniform vec3 uDeep;
-  varying vec3 vObjPos;
-  varying vec3 vWorldPos;
-  varying vec3 vWorldNormal;
-  float hash(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0;
-    return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
-  float vnoise(vec3 p){ vec3 i = floor(p); vec3 f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);
-    return mix(
-      mix(mix(hash(i), hash(i+vec3(1,0,0)), f.x), mix(hash(i+vec3(0,1,0)), hash(i+vec3(1,1,0)), f.x), f.y),
-      mix(mix(hash(i+vec3(0,0,1)), hash(i+vec3(1,0,1)), f.x), mix(hash(i+vec3(0,1,1)), hash(i+vec3(1,1,1)), f.x), f.y),
-      f.z); }
-  void main(){
-    float splotch = vnoise(vObjPos * 8.0) * 0.6 + vnoise(vObjPos * 21.0) * 0.4;
-    float topDown = 1.0 - clamp(vObjPos.y / ${TOWER.height.toFixed(2)}, 0.0, 1.0);
-    float field = splotch * 0.6 + topDown * 0.4;
-    float cover = uSoaked * 1.08;
-    if (field >= cover) discard;
-    vec3 n = normalize(vWorldNormal);
-    float up = clamp(n.y * 0.5 + 0.5, 0.0, 1.0);
-    vec3 col = mix(uDeep, uPaint, up * 0.7 + 0.3);
-    col = mix(col, vec3(0.85, 0.78, 1.0), smoothstep(cover - 0.05, cover - 0.005, field) * 0.6);
-    vec3 lightDir = normalize(vec3(0.35, 0.85, 0.4));
-    vec3 viewDir = normalize(cameraPosition - vWorldPos);
-    col += pow(max(dot(n, normalize(lightDir + viewDir)), 0.0), 90.0) * 0.9;
-    gl_FragColor = vec4(col, 1.0);
-  }
-`;
-
-const SHELL_VERT = /* glsl */ `
-  varying vec3 vObjPos;
-  varying vec3 vWorldPos;
-  varying vec3 vWorldNormal;
-  void main(){
-    vObjPos = position;
-    vec4 world = modelMatrix * vec4(position, 1.0);
-    vWorldPos = world.xyz;
-    vWorldNormal = normalize(mat3(modelMatrix) * normal);
-    gl_Position = projectionMatrix * viewMatrix * world;
-  }
-`;
 
 export class TowerSystem extends createSystem({}) {
   private ghost!: Mesh;
   private ghostRing!: Mesh;
   private real!: Group;
-  private shell!: Mesh;
-  private shellMat!: ShaderMaterial;
+  private liquid!: LiquidVisual;
+  private tankMarker!: Object3D;
   private triggerWas: [boolean, boolean] = [false, false];
   private time = 0;
   private wasDestroyed = false;
+  private lastHealth = TOWER.maxHealth;
 
   init(): void {
     // The ghost: the whole silhouette in pulsing hologram cyan.
@@ -170,22 +100,55 @@ export class TowerSystem extends createSystem({}) {
     this.ghostRing.visible = false;
     this.world.scene.add(this.ghostRing);
 
-    // The real thing + its coverage shell (hidden until placed).
-    this.real = buildTower();
+    this.real = this.buildTower();
     this.real.visible = false;
     this.world.scene.add(this.real);
-    this.shellMat = new ShaderMaterial({
-      uniforms: {
-        uSoaked: { value: 0 },
-        uPaint: { value: new Color(ENEMY_SHOT.tint) },
-        uDeep: { value: new Color(0x4a3592) },
-      },
-      vertexShader: SHELL_VERT,
-      fragmentShader: SHELL_FRAG,
-    });
-    this.shell = new Mesh(towerGeometry(), this.shellMat);
-    this.shell.scale.setScalar(1.03);
-    this.real.add(this.shell);
+  }
+
+  /** The real thing: legs, deck, frosted reservoir with LIVE juice inside. */
+  private buildTower(): Group {
+    const g = new Group();
+    const white = glossyPlastic(PALETTE.sportWhite, 0.2);
+    const red = glossyPlastic(PALETTE.sportRed, 0.25);
+
+    for (const [lx, lz] of [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]] as const) {
+      const leg = new Mesh(new CylinderGeometry(0.028, 0.036, 0.66, 10), white);
+      leg.position.set(lx, 0.33, lz);
+      g.add(leg);
+      // Red cross-brace feet so the base reads planted.
+      const foot = new Mesh(new CylinderGeometry(0.05, 0.06, 0.03, 10), red);
+      foot.position.set(lx, 0.015, lz);
+      g.add(foot);
+    }
+    const deck = new Mesh(new BoxGeometry(0.5, 0.05, 0.5), white);
+    deck.position.y = 0.62;
+    g.add(deck);
+
+    // The reservoir: juice inside, frosted shell outside, red bands + cap.
+    const inner = new CylinderGeometry(TANK_R * 0.93, TANK_R * 0.93, TANK_H * 0.97, 18);
+    this.liquid = createLiquid(inner, PALETTE.juice, PALETTE.juiceDeep, PALETTE.juiceFoam);
+    this.liquid.mesh.position.y = TANK_Y;
+    g.add(this.liquid.mesh);
+
+    const shell = new Mesh(new CylinderGeometry(TANK_R, TANK_R, TANK_H, 18), clearPlastic());
+    shell.position.y = TANK_Y;
+    shell.renderOrder = 2;
+    g.add(shell);
+
+    for (const dy of [-TANK_H / 2 + 0.04, TANK_H / 2 - 0.04]) {
+      const band = new Mesh(new TorusGeometry(TANK_R + 0.008, 0.016, 10, 24), red);
+      band.rotation.x = Math.PI / 2;
+      band.position.y = TANK_Y + dy;
+      g.add(band);
+    }
+    const cap = new Mesh(new ConeGeometry(TANK_R * 1.12, 0.24, 18), red);
+    cap.position.y = TANK_Y + TANK_H / 2 + 0.1;
+    g.add(cap);
+
+    this.tankMarker = new Object3D();
+    this.tankMarker.position.y = TANK_Y;
+    g.add(this.tankMarker);
+    return g;
   }
 
   update(delta: number): void {
@@ -198,12 +161,23 @@ export class TowerSystem extends createSystem({}) {
       this.ghostRing.visible = false;
     }
 
-    // The real tower shows whenever it's placed and we're in a run context.
     this.real.visible = tower.placed && (app.phase === 'playing' || app.phase === 'gameover');
     if (!this.real.visible) return;
 
     this.real.position.copy(tower.pos);
-    this.shellMat.uniforms.uSoaked.value = tower.soaked;
+
+    // --- The juice level IS the health. Strikes jolt the surface. ---
+    if (tower.health < this.lastHealth) this.liquid.slosh.energy = 1;
+    this.lastHealth = tower.health;
+    this.tankMarker.getWorldPosition(_tank);
+    this.liquid.update(
+      this.time,
+      delta,
+      tower.health / tower.maxHealth,
+      _tank,
+      TANK_H * 0.97,
+      _still,
+    );
 
     // Hit wobble: a quick shudder so every landed attack is felt.
     if (tower.hitFlash > 0) {
@@ -271,6 +245,7 @@ export class TowerSystem extends createSystem({}) {
     tower.pos.copy(at);
     tower.placed = true;
     resetTower();
+    this.lastHealth = tower.health;
     run.dead = false;
     app.phase = 'playing';
     this.world.getSystem(EnemySystem)?.startFresh();

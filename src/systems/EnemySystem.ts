@@ -6,24 +6,24 @@
  * render as six per-kind InstancedMeshes (see enemies/swarm.ts and the
  * pool-toy roster in enemies/geometry.ts), because the late waves put
  * hundreds of them on the deck at once. This system is the only thing that
- * writes swarm state, so all the AOE requests from elsewhere (splash, paint
- * bombs, orbiters) come in over the paint bus and are applied here.
+ * writes swarm state, so all the AOE requests from elsewhere (splash, juice
+ * bombs, orbiters) come in over the juice bus and are applied here.
  *
- * Behaviour by type:
- *  - melee toys (Bobbers, Squirts, Big Ducks, Foamers) close on you,
- *    crowd-separate, and chew on your health at the deck rim;
- *  - Slingers hold at range and throw the same slow, dodgeable paint balls
- *    you use, so incoming fire is readable;
- *  - Foamers burst into a spray of Squirts when killed;
- *  - THE BIG ONE is a wave-10 crowned duck the size of a car.
+ * Behaviour by type (THE THIRST — see enemies/geometry.ts):
+ *  - melee husks (Husks, Skitters, Clods, Clusters) close on the tower,
+ *    crowd-separate, and drain it with telegraphed snaps;
+ *  - Spitters hold at range and lob the same slow, dodgeable juice balls
+ *    you use, so incoming fire is readable — kept scarce and soft;
+ *  - Clusters burst into a spray of Skitters when killed;
+ *  - THE DROUGHT is a wave-10 crowned monolith the size of a car.
  */
 
 import { createSystem, Vector3 } from '@iwsdk/core';
 import { CanvasTexture, LinearFilter, Mesh, MeshBasicMaterial, PlaneGeometry } from 'three';
 import { Swarm } from '../enemies/swarm.js';
-import { dropletBurst, initPaintPools } from '../fx/paint.js';
+import { dropletBurst, initJuicePools } from '../fx/juice.js';
 import { initDamageNumbers, popDamage } from '../fx/damageNumbers.js';
-import { enemyShot, pendingBlasts, recycleBlast } from '../combat/paintBus.js';
+import { enemyShot, pendingBlasts, recycleBlast } from '../combat/juiceBus.js';
 import { run } from '../game/run.js';
 import { damageTower, tower } from '../game/tower.js';
 import { app } from '../game/appState.js';
@@ -71,9 +71,9 @@ export class EnemySystem extends createSystem({}) {
   private signTex!: CanvasTexture;
 
   init(): void {
-    initPaintPools(this.world.scene);
+    initJuicePools(this.world.scene);
     initDamageNumbers(this.world.scene);
-    this.swarm = new Swarm(PALETTE.paint, PALETTE.paintDeep);
+    this.swarm = new Swarm(PALETTE.juice, PALETTE.juiceDeep);
     this.world.scene.add(this.swarm.group);
     this.buildSign();
     this.setSign('SHOOT START TO PLAY', '#1fc4c9');
@@ -148,7 +148,7 @@ export class EnemySystem extends createSystem({}) {
       }
     }
 
-    // --- Area damage requested by other systems (splash, bombs, orbiters). ---
+    // --- Area damage requested by other systems (bursts, bombs, orbiters). ---
     for (const blast of pendingBlasts.splice(0)) {
       this.applyBlast(blast.pos, blast.radius, blast.damage, blast.big);
       recycleBlast(blast);
@@ -175,7 +175,7 @@ export class EnemySystem extends createSystem({}) {
 
       // Ranged types stop further out; melee press right up to the tower.
       const standoff = def.ranged
-        ? 2.6 + (kind === EnemyKind.Boss ? 1.2 : 0)
+        ? 2.2 + (kind === EnemyKind.Boss ? 1.4 : 0)
         : TOWER.radius + swarm.radius[i] + 0.12;
       let speed = WAVES.baseSpeed * swarm.speed[i] * (1 + (run.wave - 1) * 0.06);
 
@@ -183,23 +183,23 @@ export class EnemySystem extends createSystem({}) {
       let lateral = 0;
       switch (kind) {
         case EnemyKind.Drifter:
-          // Beach balls BOUNCE in: forward motion pulses with each hop.
+          // Husks tumble in surges: forward motion pulses like falling rock.
           speed *= 0.35 + 1.5 * Math.max(0, Math.sin(this.time * 3.2 + swarm.phase[i]));
           break;
         case EnemyKind.Scurrier:
-          // Droplets dart in a zigzag — quick, jittery, hard to lead.
+          // Skitters dart in a zigzag — quick, jittery, hard to lead.
           speed *= 0.45 + 1.2 * (0.5 + 0.5 * Math.sin(this.time * 5.1 + swarm.phase[i]));
           lateral = Math.sin(this.time * 4.3 + swarm.phase[i]) * 0.6;
           break;
         case EnemyKind.Lobber:
-          // Balloons waddle, swaying side to side as the water shifts.
+          // Spitters lean side to side as they stalk into range.
           lateral = Math.sin(this.time * 1.9 + swarm.phase[i]) * 0.3;
           break;
         case EnemyKind.Splitter:
-          // Foam drifts on a lazy weave.
+          // Clusters shiver along a lazy weave.
           lateral = Math.sin(this.time * 2.6 + swarm.phase[i]) * 0.45;
           break;
-        // Big Ducks and the Boss just PLOW: dead straight, inevitable.
+        // Clods and THE DROUGHT just PLOW: dead straight, inevitable.
       }
 
       // Freeze forward motion during an attack so the lunge reads clean.
@@ -256,7 +256,7 @@ export class EnemySystem extends createSystem({}) {
         }
       }
 
-      // Bob, weighed down as it takes paint. Hover height leans on the
+      // Bob, weighed down as it takes juice. Hover height leans on the
       // body radius just enough that big toys loom, clamped so nothing —
       // especially the boss — ever floats away or clips the floor.
       const covered = 1 - Math.max(0, swarm.hp[i]) / swarm.maxHp[i];

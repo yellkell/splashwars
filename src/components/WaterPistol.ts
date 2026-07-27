@@ -35,5 +35,5 @@ export const WaterPistol = createComponent(
     /** Dribble shots left in the empty-tank sputter. */
     sputter: { type: Types.Int32, default: 0 },
   },
-  'A plastic water pistol with a visible, sloshing paint tank.',
+  'A plastic water pistol with a visible, sloshing juice tank.',
 );

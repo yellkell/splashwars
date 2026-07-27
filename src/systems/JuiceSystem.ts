@@ -1,16 +1,16 @@
 /**
- * The paint sim: every ball in flight — yours and theirs — and everywhere
- * paint lands.
+ * The juice sim: every ball in flight — yours and theirs — and everywhere
+ * juice lands.
  *
  * Balls live in flat typed-array slots (no per-ball entities) and render
  * through the shared InstancedMesh pool, slightly stretched along their
  * velocity so they wobble like thrown water balloons. Each frame a ball:
- *  - arcs under paint-gravity;
+ *  - arcs under juice-gravity;
  *  - tests the swarm through its SPATIAL GRID, so we only check the handful
  *    of enemies sharing a cell rather than all of them — this is what keeps
  *    hundreds of enemies × dozens of balls affordable;
- *  - on a hit, deals damage (scaled by your HEAVY PAINT stacks), pops a
- *    damage number, and requests a splash blast if you have SPLASH;
+ *  - on a hit, deals damage (scaled by your HEAVY JUICE stacks), pops a
+ *    damage number, and requests a burst blast if you have SPLASH;
  *  - tests the upgrade cards while the board is up (you pick by shooting);
  *  - tests the floor — a landing stamps a pooled splat decal and plops.
  *
@@ -26,15 +26,15 @@ import {
   pendingEnemyShots,
   recycleSpawn,
   requestBlast,
-} from '../combat/paintBus.js';
+} from '../combat/juiceBus.js';
 import {
   MAX_BLOBS,
   dropletBurst,
-  initPaintPools,
-  updatePaintPools,
+  initJuicePools,
+  updateJuicePools,
   type BlobPool,
   type SplatPool,
-} from '../fx/paint.js';
+} from '../fx/juice.js';
 import { initDamageNumbers, popDamage, updateDamageNumbers } from '../fx/damageNumbers.js';
 import { ballDamage, damagePlayer, run, UpgradeId } from '../game/run.js';
 import { damageTower, tower } from '../game/tower.js';
@@ -48,7 +48,7 @@ const _head = new Vector3();
 const _camQ = new Quaternion();
 const _near: number[] = [];
 
-export class PaintSystem extends createSystem({}) {
+export class JuiceSystem extends createSystem({}) {
   private blobs!: BlobPool;
   private splats!: SplatPool;
   // Structure-of-arrays ball state.
@@ -66,7 +66,7 @@ export class PaintSystem extends createSystem({}) {
   private splatSfxAcc = 0;
 
   init(): void {
-    const pools = initPaintPools(this.world.scene);
+    const pools = initJuicePools(this.world.scene);
     this.blobs = pools.blobs;
     this.splats = pools.splats;
     initDamageNumbers(this.world.scene);
@@ -84,7 +84,7 @@ export class PaintSystem extends createSystem({}) {
     for (const s of pendingBlobs.splice(0)) this.claim(s.pos, s.vel, 0), recycleSpawn(s);
     for (const s of pendingEnemyShots.splice(0)) this.claim(s.pos, s.vel, 1), recycleSpawn(s);
 
-    const splashStacks = run.stacks[UpgradeId.Splash];
+    const burstStacks = run.stacks[UpgradeId.Burst];
     const damage = ballDamage();
 
     for (let i = 0; i < MAX_BLOBS; i++) {
@@ -104,10 +104,10 @@ export class PaintSystem extends createSystem({}) {
       let hit = false;
 
       if (hostile) {
-        // --- Their paint vs your head… ---
+        // --- Their juice vs your head… ---
         if (_pos.distanceToSquared(_head) <= ENEMY_SHOT.hitRadius * ENEMY_SHOT.hitRadius) {
           dropletBurst(_pos, 10, 1.1);
-          if (damagePlayer(9)) sfx.playerDown();
+          if (damagePlayer(ENEMY_SHOT.damagePlayer)) sfx.playerDown();
           else sfx.playerHurt();
           hit = true;
         }
@@ -119,12 +119,12 @@ export class PaintSystem extends createSystem({}) {
           if (tdx * tdx + tdz * tdz <= rr * rr && this.py[i] <= TOWER.height) {
             dropletBurst(_pos, 8, 0.9);
             sfx.towerHit();
-            damageTower(11);
+            damageTower(ENEMY_SHOT.damageTower);
             hit = true;
           }
         }
       } else {
-        // --- Your paint vs the swarm, via the grid. ---
+        // --- Your juice vs the swarm, via the grid. ---
         if (swarm) {
           swarm.near(this.px[i], this.pz[i], radius + 0.5, _near);
           for (let n = 0; n < _near.length; n++) {
@@ -137,11 +137,11 @@ export class PaintSystem extends createSystem({}) {
             if (dx * dx + dy * dy + dz * dz <= r * r) {
               enemies!.hit(j, damage);
               dropletBurst(_pos, 8, 0.9);
-              if (splashStacks > 0) {
+              if (burstStacks > 0) {
                 requestBlast(
                   _pos,
-                  AOE.splashRadius + AOE.splashRadiusPerStack * (splashStacks - 1),
-                  damage * AOE.splashFraction,
+                  AOE.burstRadius + AOE.burstRadiusPerStack * (burstStacks - 1),
+                  damage * AOE.burstFraction,
                   false,
                 );
               }
@@ -155,7 +155,7 @@ export class PaintSystem extends createSystem({}) {
           }
         }
 
-        // --- Your paint vs any card board on screen (menus, upgrades). ---
+        // --- Your juice vs any card board on screen (menus, upgrades). ---
         if (!hit) {
           for (const board of activeBoards) {
             if (board.testHit(_pos, radius)) {
@@ -195,7 +195,7 @@ export class PaintSystem extends createSystem({}) {
     }
 
     this.blobs.commit();
-    updatePaintPools(delta);
+    updateJuicePools(delta);
     updateDamageNumbers(delta, _camQ);
     void popDamage;
   }

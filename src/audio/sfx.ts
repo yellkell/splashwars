@@ -147,19 +147,19 @@ export function squirtStop(hand: 0 | 1): void {
 
 // --- One-shots. ------------------------------------------------------------
 
-/** Paint landing on the deck/floor — a fat wet plop. */
+/** Juice landing on the deck/floor — a fat wet plop. */
 export function splat(): void {
   noiseBurst(900, 1.1, 0.16, 0.22, 300);
   blip(220, 90, 0.1, 0.1);
 }
 
-/** Paint landing on an enemy — plasticky slap on top of the plop. */
+/** Juice landing on an enemy — plasticky slap on top of the plop. */
 export function hitSplat(): void {
   noiseBurst(1400, 1.4, 0.12, 0.2, 500);
   blip(500, 180, 0.07, 0.12, 'triangle');
 }
 
-/** A fully-painted enemy popping — cork pop + wet shower. */
+/** A fully-juiced enemy popping — cork pop + wet shower. */
 export function enemyPop(): void {
   blip(300, 950, 0.09, 0.4);
   noiseBurst(700, 0.9, 0.5, 0.3, 200);
@@ -176,7 +176,7 @@ export function draw(): void {
   blip(700, 1150, 0.06, 0.14, 'triangle');
 }
 
-/** A gun leaving your hand — heavier whoosh than a paint ball. */
+/** A gun leaving your hand — heavier whoosh than a juice ball. */
 export function throwWhoosh(): void {
   noiseBurst(500, 0.8, 0.3, 0.2, 180);
 }
@@ -217,7 +217,7 @@ export function towerDown(): void {
   noiseBurst(600, 0.6, 1.2, 0.28, 90);
 }
 
-/** An enemy lobbing paint at you — a hollow, sinister underarm whoop. */
+/** An enemy lobbing juice at you — a hollow, sinister underarm whoop. */
 export function enemyLob(): void {
   blip(300, 620, 0.16, 0.1, 'sine');
   noiseBurst(700, 1.2, 0.18, 0.07, 1400);
@@ -235,8 +235,8 @@ export function playerDown(): void {
   noiseBurst(500, 0.6, 1.0, 0.22, 90);
 }
 
-/** A Paint Bomb going off — a big low whump with a wet tail. */
-export function paintBomb(): void {
+/** A Juice Bomb going off — a big low whump with a wet tail. */
+export function juiceBomb(): void {
   blip(150, 40, 0.5, 0.42, 'square');
   noiseBurst(500, 0.6, 0.8, 0.4, 120);
 }

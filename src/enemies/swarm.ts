@@ -1,18 +1,19 @@
 /**
  * THE SWARM — every enemy in the game, in six draw calls.
  *
- * Creative direction lives in enemies/geometry.ts (the pool-toy roster);
- * this file makes it scale. One InstancedMesh PER KIND, all sharing a
- * single shader:
+ * Creative direction lives in enemies/geometry.ts (THE THIRST — parched
+ * faceted husk-creatures); this file makes it scale. One InstancedMesh PER
+ * KIND, all sharing a single shader:
  *
- *  - vertex `aRole` colours parts: body (instance tint), accent (beaks,
- *    knots, crowns), eye whites and pupils — real geometry, no textures;
- *  - beach balls get shader stripes (`uStripes` segments of tint/white);
- *  - paint coverage is per-instance: the noise-masked, top-down drip mask
- *    fills each toy individually as it takes damage, glossy-wet with a
- *    Blinn-Phong glint so fresh paint reads as THICK and shiny;
- *  - instances yaw to face you via their matrix, and squash-and-stretch
- *    when hit.
+ *  - vertex `aRole` colours parts: body (matte per-instance tint), accent
+ *    (darker crust), GLOW (emissive eyes, per-kind colour) and maw (dark
+ *    hollows) — real geometry, no textures;
+ *  - juice coverage is per-instance: the noise-masked, top-down drip mask
+ *    covers each husk individually as it takes damage. The bodies are DRY
+ *    and matte; the juice is glossy-wet with a hot Blinn-Phong glint — the
+ *    dry-vs-wet contrast is the game's whole visual sentence;
+ *  - instances yaw to face the tower via their matrix, squash-and-stretch
+ *    when hit, and rear-back/snap on their attack telegraph.
  *
  * State stays structure-of-arrays over GLOBAL slots (the rest of the game
  * addresses enemies by slot); each slot additionally owns a compact LOCAL
@@ -57,7 +58,7 @@ const _c = new Color();
 const UP = new Vector3(0, 1, 0);
 
 // ---------------------------------------------------------------------------
-// The shader: role-coloured plastic + stripes + glossy paint coverage.
+// The shader: role-coloured plastic + stripes + glossy juice coverage.
 // ---------------------------------------------------------------------------
 
 const VERT = /* glsl */ `
@@ -86,10 +87,10 @@ const VERT = /* glsl */ `
 `;
 
 const FRAG = /* glsl */ `
-  uniform vec3 uPaint;
-  uniform vec3 uPaintDeep;
+  uniform vec3 uJuice;
+  uniform vec3 uJuiceDeep;
   uniform vec3 uAccent;
-  uniform float uStripes; // 0 = plain body; N = beach-ball segments
+  uniform vec3 uGlow; // the eyes' emissive colour
   varying vec3 vObjPos;
   varying vec3 vWorldPos;
   varying vec3 vWorldNormal;
@@ -116,40 +117,34 @@ const FRAG = /* glsl */ `
     vec3 n = normalize(vWorldNormal);
     float up = clamp(n.y * 0.5 + 0.5, 0.0, 1.0);
 
-    // --- Base colour by vertex role. ---
-    vec3 base = vTint;
-    if (uStripes > 0.5 && vRole < 0.5) {
-      // Beach-ball segments: alternate tint / white around the equator.
-      float seg = floor((atan(vObjPos.x, vObjPos.z) / 6.2831853 + 0.5) * uStripes);
-      base = mix(vTint, vec3(0.97), mod(seg, 2.0));
-    }
+    // --- Base colour by vertex role. THE THIRST is DRY: matte, dusty,
+    // crusted — the only brightness on them is the glow of their eyes. ---
     vec3 col =
-      vRole < 0.5 ? base * (0.62 + 0.45 * up) :
-      vRole < 1.5 ? uAccent * (0.66 + 0.4 * up) :
-      vRole < 2.5 ? vec3(1.0) :
-                    vec3(0.09, 0.13, 0.16);
+      vRole < 0.5 ? vTint * (0.5 + 0.5 * up) :
+      vRole < 1.5 ? uAccent * (0.5 + 0.42 * up) :
+      vRole < 2.5 ? uGlow * 1.7 :
+                    vec3(0.05, 0.05, 0.07);
 
-    // --- Shared wet-specular key: the whole game is glossy plastic. ---
     vec3 lightDir = normalize(vec3(0.35, 0.85, 0.4));
     vec3 viewDir = normalize(cameraPosition - vWorldPos);
     vec3 h = normalize(lightDir + viewDir);
     float specDot = max(dot(n, h), 0.0);
-    // Toy-shell sheen on everything…
-    col += pow(specDot, 40.0) * 0.28;
+    // Barely any sheen on the dry crust — they don't shine, they crave.
+    if (vRole < 1.5) col += pow(specDot, 24.0) * 0.05;
 
-    // --- Paint coverage: noise splotches, dripping from the top down. ---
-    // (Skip the pupils so eyes stay readable until the very end.)
-    if (vRole < 2.5) {
+    // --- Juice coverage: noise splotches, dripping from the top down. ---
+    // (Skip the glow so the eyes burn through until the very end.)
+    if (vRole < 1.5 || vRole > 2.5) {
       float splotch = vnoise(vObjPos * 6.0 + vSeed * 31.0) * 0.6
                     + vnoise(vObjPos * 15.0 + vSeed * 17.0) * 0.4;
       float topDown = 1.0 - clamp(vObjPos.y * 1.6 + 0.5, 0.0, 1.0);
       float field = splotch * 0.55 + topDown * 0.45;
       float cover = vCoverage * 1.08;
       if (field < cover) {
-        vec3 paint = mix(uPaintDeep, uPaint, up * 0.7 + 0.3);
-        paint = mix(paint, vec3(1.0, 0.72, 0.88), smoothstep(cover - 0.06, cover - 0.005, field) * 0.6);
-        // …and a much hotter, tighter glint on the wet paint itself.
-        col = paint + pow(specDot, 90.0) * 0.9;
+        vec3 juice = mix(uJuiceDeep, uJuice, up * 0.7 + 0.3);
+        juice = mix(juice, vec3(1.0, 0.72, 0.88), smoothstep(cover - 0.06, cover - 0.005, field) * 0.6);
+        // …and a much hotter, tighter glint on the wet juice itself.
+        col = juice + pow(specDot, 90.0) * 0.9;
       }
     }
 
@@ -212,7 +207,7 @@ class KindBlock {
   readonly free: number[] = [];
   highWater = 0;
 
-  constructor(kind: EnemyKindId, paint: number, paintDeep: number) {
+  constructor(kind: EnemyKindId, juice: number, juiceDeep: number) {
     const cap = KIND_CAPACITY[kind];
     const def = ENEMY_TYPES[kind];
     const geo = enemyGeometry(kind).clone();
@@ -227,10 +222,10 @@ class KindBlock {
 
     const mat = new ShaderMaterial({
       uniforms: {
-        uPaint: { value: new Color(paint) },
-        uPaintDeep: { value: new Color(paintDeep) },
+        uJuice: { value: new Color(juice) },
+        uJuiceDeep: { value: new Color(juiceDeep) },
         uAccent: { value: new Color(def.accent) },
-        uStripes: { value: def.stripes ?? 0 },
+        uGlow: { value: new Color(def.glow) },
       },
       vertexShader: VERT,
       fragmentShader: FRAG,
@@ -296,9 +291,9 @@ export class Swarm {
   private cursor = 0;
   count = 0;
 
-  constructor(paint: number, paintDeep: number) {
+  constructor(juice: number, juiceDeep: number) {
     this.blocks = Object.fromEntries(
-      ALL_KINDS.map((k) => [k, new KindBlock(k, paint, paintDeep)]),
+      ALL_KINDS.map((k) => [k, new KindBlock(k, juice, juiceDeep)]),
     ) as Record<EnemyKindId, KindBlock>;
     for (const k of ALL_KINDS) this.group.add(this.blocks[k].mesh);
   }
@@ -358,7 +353,7 @@ export class Swarm {
     this.blocks[this.kind[i] as EnemyKindId].release(this.local[i]);
   }
 
-  /** Apply damage; coverage tracks it so a toy visibly fills with paint. */
+  /** Apply damage; coverage tracks it so a toy visibly fills with juice. */
   damage(i: number, amount: number): boolean {
     if (!this.alive[i]) return false;
     this.hp[i] -= amount;

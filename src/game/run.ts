@@ -2,7 +2,7 @@
  * The run — everything that persists across waves within a single attempt,
  * and the upgrade catalogue that grows it.
  *
- * A plain module singleton (same pattern as the paint bus): every system
+ * A plain module singleton (same pattern as the juice bus): every system
  * reads and writes the same `run` object, so there is exactly one source of
  * truth for your health, your stacks and your score. `resetRun()` starts a
  * fresh attempt.
@@ -16,7 +16,7 @@ export const UpgradeId = {
   Orbital: 'orbital',
   Health: 'health',
   ThrowBlast: 'throwBlast',
-  Splash: 'splash',
+  Burst: 'burst',
 } as const;
 export type UpgradeIdT = (typeof UpgradeId)[keyof typeof UpgradeId];
 
@@ -35,7 +35,7 @@ export interface UpgradeDef {
 export const UPGRADE_CATALOGUE: UpgradeDef[] = [
   {
     id: UpgradeId.Damage,
-    title: 'HEAVY PAINT',
+    title: 'HEAVY JUICE',
     blurb: 'Every ball hits harder',
     color: '#e0312e',
     max: 8,
@@ -52,7 +52,7 @@ export const UPGRADE_CATALOGUE: UpgradeDef[] = [
   {
     id: UpgradeId.Orbital,
     title: 'ORBITERS',
-    blurb: 'Paint globes circle you and grind anything they touch',
+    blurb: 'Juice globes circle you and grind anything they touch',
     color: '#1fc4c9',
     max: 6,
     effect: (s) => (s === 0 ? 'Gain 2 orbiting globes' : '+1 globe, faster orbit'),
@@ -67,19 +67,19 @@ export const UPGRADE_CATALOGUE: UpgradeDef[] = [
   },
   {
     id: UpgradeId.ThrowBlast,
-    title: 'PAINT BOMB',
-    blurb: 'Thrown pistols detonate in a wave of paint',
+    title: 'JUICE BOMB',
+    blurb: 'Thrown pistols detonate in a wave of juice',
     color: '#ffb000',
     max: 6,
     effect: (s) => (s === 0 ? 'Thrown guns explode' : '+bigger, +harder blast'),
   },
   {
-    id: UpgradeId.Splash,
-    title: 'SPLASH',
+    id: UpgradeId.Burst,
+    title: 'BURST',
     blurb: 'Balls burst, spattering everything nearby',
     color: '#b9a8ff',
     max: 6,
-    effect: (s) => (s === 0 ? 'Balls deal splash damage' : '+splash radius'),
+    effect: (s) => (s === 0 ? 'Balls deal burst damage' : '+splash radius'),
   },
 ];
 
@@ -90,7 +90,7 @@ export interface RunState {
   sinceHit: number;
   /** Remaining invulnerability, seconds — see damagePlayer(). */
   iframes: number;
-  /** 0..1 visor paint, driven by damage — the HUD-free health read. */
+  /** 0..1 visor juice, driven by damage — the HUD-free health read. */
   hurt: number;
   dead: boolean;
   deathTimer: number;
@@ -109,7 +109,7 @@ function emptyStacks(): Record<UpgradeIdT, number> {
     [UpgradeId.Orbital]: 0,
     [UpgradeId.Health]: 0,
     [UpgradeId.ThrowBlast]: 0,
-    [UpgradeId.Splash]: 0,
+    [UpgradeId.Burst]: 0,
   };
 }
 
@@ -153,7 +153,7 @@ export function applyUpgrade(id: UpgradeIdT): void {
   }
 }
 
-/** Damage one paint ball deals, after the HEAVY PAINT stacks. */
+/** Damage one juice ball deals, after the HEAVY JUICE stacks. */
 export function ballDamage(): number {
   return PISTOL.damage * (1 + 0.35 * run.stacks[UpgradeId.Damage]);
 }
