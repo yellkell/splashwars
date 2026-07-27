@@ -333,34 +333,42 @@ export interface TurretDef {
   color: string;
 }
 
-/** Non-turret purchases on the same shop board. */
-export const SHOP_ITEMS = [
+/**
+ * STAT SINKS — the shop's bottom row: permanent base-stat levels you can
+ * buy again and again, with the price climbing every level. This is where
+ * late-run money goes when the turret field is full: there is ALWAYS
+ * something worth saving for, and every purchase makes you measurably,
+ * permanently stronger for the rest of the run.
+ */
+export const SINK_DEFS = [
   {
-    id: 'topup',
-    name: 'TOP-UP',
-    blurb: 'Pour 80 juice straight back into the tower',
-    cost: 100,
-    color: '#f0299b',
+    id: 'power',
+    name: 'POWER',
+    blurb: 'Base ball damage, up 15% per level, forever',
+    baseCost: 120,
+    color: '#e0312e',
   },
   {
-    id: 'overdrive',
-    name: 'OVERDRIVE',
-    blurb: 'Double ball damage for 20 seconds',
-    cost: 200,
-    color: '#ffb000',
-  },
-  {
-    id: 'bigtank',
+    id: 'tanks',
     name: 'BIG TANKS',
-    blurb: 'Every fresh pistol carries 4 more balls',
-    cost: 150,
+    blurb: 'Every fresh pistol carries 3 more balls per level',
+    baseCost: 100,
     color: '#1fc4c9',
   },
+  {
+    id: 'reservoir',
+    name: 'RESERVOIR',
+    blurb: 'The tower holds 60 more juice per level, filled on purchase',
+    baseCost: 140,
+    color: '#f0299b',
+  },
 ] as const;
-export const OVERDRIVE_SECONDS = 20;
-export const TOPUP_AMOUNT = 80;
-export const BIGTANK_BONUS = 4; // balls per stack
-export const BIGTANK_MAX = 4;
+export type SinkId = (typeof SINK_DEFS)[number]['id'];
+/** Each level costs this much more than the last. */
+export const SINK_COST_GROWTH = 1.5;
+export const SINK_POWER_PER_LEVEL = 0.15;
+export const SINK_TANK_BALLS_PER_LEVEL = 3;
+export const SINK_RESERVOIR_PER_LEVEL = 60;
 
 export const TURRET_DEFS: TurretDef[] = [
   {

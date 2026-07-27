@@ -24,7 +24,7 @@ import { TurretSystem } from './systems/TurretSystem.js';
 import { run } from './game/run.js';
 import { app } from './game/appState.js';
 import { tower as towerState } from './game/tower.js';
-import { addDrops as debugAddDrops, bank, boost as boostState, placedTurrets } from './game/shop.js';
+import { addDrops as debugAddDrops, bank, sinks as sinkState, placedTurrets } from './game/shop.js';
 import { WaterPistol } from './components/WaterPistol.js';
 import { debugLiveDigits, debugNumbersInstance, popDamage } from './fx/damageNumbers.js';
 import { Vector3 as DebugVec3 } from 'three';
@@ -102,8 +102,8 @@ World.create(container, {
       appPhase: () => app.phase,
       drops: () => ({ drops: bank.drops, shown: Math.round(bank.shown), turrets: placedTurrets.map((t) => t.kind) }),
       addDrops: (n = 500) => debugAddDrops(n),
-      buyItem: (id = 'overdrive') => world.getSystem(TurretSystem)?.purchase(id),
-      boost: () => ({ ...boostState }),
+      buyItem: (id = 'power') => world.getSystem(TurretSystem)?.purchase(id),
+      sinks: () => ({ ...sinkState }),
       buyTurret: (kind = 'sprinkler', x = 0.8, z = -1.2) =>
         world.getSystem(TurretSystem)?.placeTurret(kind as never, new DebugVec3(x, 0, z)),
       pistols: () => {

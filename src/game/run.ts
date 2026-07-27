@@ -8,7 +8,8 @@
  * fresh attempt.
  */
 
-import { PISTOL, PLAYER } from '../config.js';
+import { PISTOL, PLAYER, SINK_POWER_PER_LEVEL } from '../config.js';
+import { sinks } from './shop.js';
 
 export const UpgradeId = {
   Damage: 'damage',
@@ -153,9 +154,13 @@ export function applyUpgrade(id: UpgradeIdT): void {
   }
 }
 
-/** Damage one juice ball deals, after the HEAVY JUICE stacks. */
+/** Damage one juice ball deals: HEAVY JUICE stacks × bought POWER levels. */
 export function ballDamage(): number {
-  return PISTOL.damage * (1 + 0.35 * run.stacks[UpgradeId.Damage]);
+  return (
+    PISTOL.damage *
+    (1 + 0.35 * run.stacks[UpgradeId.Damage]) *
+    (1 + SINK_POWER_PER_LEVEL * sinks.power)
+  );
 }
 
 /** Three distinct upgrades to offer, skipping any that are maxed out. */

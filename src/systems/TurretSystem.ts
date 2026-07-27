@@ -7,9 +7,10 @@
  *
  * THE SHOP: press Y (the button on your watch wrist) any time mid-battle
  * and the shop board flips up — a 3×2 grid of the same shoot-to-pick cards
- * as everything else. Top row: turrets. Bottom row: consumables — TOP-UP
- * (instant tower juice), OVERDRIVE (20 s of double ball damage), BIG TANKS
- * (permanently fatter pistol tanks). A card you can't afford shakes its
+ * as everything else. Top row: turrets. Bottom row: STAT SINKS — POWER,
+ * BIG TANKS and RESERVOIR levels you can buy again and again, each level
+ * pricier than the last, so late-run money always has somewhere to go and
+ * every purchase is a permanent base-stat bump. A card you can't afford shakes its
  * juice off with a dead buzz. Buying a turret hands you a ghost that glides
  * on your gaze; trigger plants it. The fight does not pause.
  *
@@ -50,7 +51,7 @@ import {
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CardBoard } from '../ui/cardBoard.js';
 import { app } from '../game/appState.js';
-import { bank, boost, build, placedTurrets, spendDrops } from '../game/shop.js';
+import { bank, build, placedTurrets, sinkCost, sinks, spendDrops } from '../game/shop.js';
 import { tower } from '../game/tower.js';
 import { EnemySystem } from './EnemySystem.js';
 import { squirtBlob } from '../combat/juiceBus.js';
@@ -58,12 +59,10 @@ import { dropletBurst } from '../fx/juice.js';
 import { pulseHand } from '../input/haptics.js';
 import * as sfx from '../audio/sfx.js';
 import {
-  BIGTANK_MAX,
-  OVERDRIVE_SECONDS,
   PALETTE,
   SHOP,
-  SHOP_ITEMS,
-  TOPUP_AMOUNT,
+  SINK_DEFS,
+  SINK_RESERVOIR_PER_LEVEL,
   TOWER,
   TURRET,
   TURRET_DEFS,
@@ -188,7 +187,6 @@ export class TurretSystem extends createSystem({}) {
   private watchTex!: CanvasTexture;
   private watchAttached = false;
   private lastWatchValue = -1;
-  private lastOverdriveShown = -1;
   private toggleWas = false;
   private lastPlacingShown: string | null = null;
   private triggerWas: [boolean, boolean] = [false, false];
@@ -208,8 +206,6 @@ export class TurretSystem extends createSystem({}) {
     this.world.camera.getWorldPosition(_cam);
     this.board.update(delta, _cam);
 
-    // OVERDRIVE burns down here — one owner for the clock.
-    if (boost.overdrive > 0) boost.overdrive = Math.max(0, boost.overdrive - delta);
     this.updateWatch(delta);
 
     // Run resets (new game) clear the field.
@@ -281,33 +277,35 @@ export class TurretSystem extends createSystem({}) {
       color: def.color,
       scale: 0.85,
     }));
-    const itemCards = SHOP_ITEMS.map((item) => ({
-      id: item.id as string,
-      title: item.name,
-      blurb: item.blurb,
-      effectLine: `${item.cost} DROPS`,
-      footnote:
-        item.id === 'bigtank' && boost.tankStacks > 0
-          ? `owned ×${boost.tankStacks}`
-          : item.id === 'overdrive' && boost.overdrive > 0
-            ? `${Math.ceil(boost.overdrive)}s running`
-            : bank.drops < item.cost
-              ? `need ${item.cost - bank.drops} more`
+    // Bottom row: the stat sinks — buy forever, price climbs per level.
+    const sinkCards = SINK_DEFS.map((def) => {
+      const level = sinks[def.id];
+      const cost = sinkCost(def.baseCost, level);
+      return {
+        id: def.id as string,
+        title: def.name,
+        blurb: def.blurb,
+        effectLine: `${cost} DROPS`,
+        footnote:
+          level > 0
+            ? `LV ${level}${bank.drops < cost ? ` · need ${cost - bank.drops} more` : ''}`
+            : bank.drops < cost
+              ? `need ${cost - bank.drops} more`
               : undefined,
-      color: item.color,
-      scale: 0.85,
-    }));
+        color: def.color,
+        scale: 0.85,
+      };
+    });
 
-    this.board.show([...turretCards, ...itemCards], {
+    this.board.show([...turretCards, ...sinkCards], {
       y: SHOP.boardHeight,
       distance: SHOP.boardDistance,
       perRow: 3,
       canPick: (id) => {
         const turret = TURRET_DEFS.find((d) => d.id === id);
         if (turret) return bank.drops >= turret.cost && placedTurrets.length < SHOP.maxTurrets;
-        const item = SHOP_ITEMS.find((d) => d.id === id)!;
-        if (item.id === 'bigtank' && boost.tankStacks >= BIGTANK_MAX) return false;
-        return bank.drops >= item.cost;
+        const def = SINK_DEFS.find((d) => d.id === id)!;
+        return bank.drops >= sinkCost(def.baseCost, sinks[def.id]);
       },
       onPick: (id) => this.purchase(id),
     });
@@ -323,21 +321,15 @@ export class TurretSystem extends createSystem({}) {
       pulseHand(this.world.session, HANDS[SHOP.toggleHand], 0.4, 60);
       return;
     }
-    const item = SHOP_ITEMS.find((d) => d.id === id)!;
-    if (!spendDrops(item.cost)) return;
+    const def = SINK_DEFS.find((d) => d.id === id)!;
+    if (!spendDrops(sinkCost(def.baseCost, sinks[def.id]))) return;
     sfx.buy();
-    switch (item.id) {
-      case 'topup':
-        tower.health = Math.min(tower.maxHealth, tower.health + TOPUP_AMOUNT);
-        tower.hitFlash = 0;
-        sfx.refund();
-        break;
-      case 'overdrive':
-        boost.overdrive += OVERDRIVE_SECONDS;
-        break;
-      case 'bigtank':
-        boost.tankStacks += 1;
-        break;
+    sinks[def.id] += 1;
+    if (def.id === 'reservoir') {
+      // The new capacity arrives FULL — the level visibly rises.
+      tower.maxHealth += SINK_RESERVOIR_PER_LEVEL;
+      tower.health = Math.min(tower.maxHealth, tower.health + SINK_RESERVOIR_PER_LEVEL);
+      sfx.refund();
     }
   }
 
@@ -534,11 +526,9 @@ export class TurretSystem extends createSystem({}) {
     bank.shown += (bank.drops - bank.shown) * Math.min(1, delta * 6);
     if (Math.abs(bank.drops - bank.shown) < 0.6) bank.shown = bank.drops;
     const display = Math.round(bank.shown);
-    const od = Math.ceil(boost.overdrive);
-    if (display !== this.lastWatchValue || build.placing !== this.lastPlacingShown || od !== this.lastOverdriveShown) {
+    if (display !== this.lastWatchValue || build.placing !== this.lastPlacingShown) {
       this.lastWatchValue = display;
       this.lastPlacingShown = build.placing;
-      this.lastOverdriveShown = od;
       this.drawWatch(display);
     }
   }
@@ -554,7 +544,7 @@ export class TurretSystem extends createSystem({}) {
     ctx.roundRect(4, 4, W - 8, H - 8, 34);
     ctx.fill();
     ctx.lineWidth = 6;
-    ctx.strokeStyle = boost.overdrive > 0 ? '#ffb000' : '#e0312e';
+    ctx.strokeStyle = '#e0312e';
     ctx.stroke();
     ctx.fillStyle = '#ffd23f';
     ctx.font = '900 74px system-ui, -apple-system, sans-serif';
@@ -564,15 +554,7 @@ export class TurretSystem extends createSystem({}) {
     ctx.textAlign = 'left';
     ctx.fillStyle = '#9fb0ba';
     ctx.fillText('DROPS', 30, H / 2 - 18);
-    ctx.fillText(
-      boost.overdrive > 0
-        ? `OD ${Math.ceil(boost.overdrive)}s`
-        : build.placing
-          ? 'Y: CANCEL'
-          : 'Y: SHOP',
-      30,
-      H - 40,
-    );
+    ctx.fillText(build.placing ? 'Y: CANCEL' : 'Y: SHOP', 30, H - 40);
     this.watchTex.needsUpdate = true;
   }
 }

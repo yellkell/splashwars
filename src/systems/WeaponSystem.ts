@@ -32,9 +32,9 @@ import { dropletBurst, stampSplat } from '../fx/juice.js';
 import { pulseHand } from '../input/haptics.js';
 import { run, UpgradeId } from '../game/run.js';
 import { app } from '../game/appState.js';
-import { boost, build } from '../game/shop.js';
+import { build, sinks } from '../game/shop.js';
 import * as sfx from '../audio/sfx.js';
-import { AOE, AUTO, HOLSTER, PISTOL } from '../config.js';
+import { AOE, AUTO, HOLSTER, PISTOL, SINK_TANK_BALLS_PER_LEVEL } from '../config.js';
 
 const HANDS = ['left', 'right'] as const;
 type Hand = 0 | 1;
@@ -241,9 +241,9 @@ export class WeaponSystem extends createSystem({
     if (app.phase === 'placing' || build.placing) return;
 
     let ammo = e.getValue(WaterPistol, 'ammo') ?? 1;
-    // BIG TANKS stacks stretch every tank without touching the visuals —
+    // BIG TANKS levels stretch every tank without touching the visuals —
     // the same full reservoir just holds more shots.
-    const drain = 1 / (PISTOL.shotsPerTank + boost.tankStacks * 4);
+    const drain = 1 / (PISTOL.shotsPerTank + sinks.tanks * SINK_TANK_BALLS_PER_LEVEL);
     const autoStacks = run.stacks[UpgradeId.AutoFire];
 
     // --- SEMI-AUTO: exactly one ball per trigger press, instantly. ---

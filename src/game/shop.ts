@@ -7,7 +7,7 @@
  */
 
 import { Vector3 } from 'three';
-import type { TurretKindId } from '../config.js';
+import { SINK_COST_GROWTH, type TurretKindId } from '../config.js';
 
 export const bank = {
   drops: 0,
@@ -29,17 +29,22 @@ export function spendDrops(n: number): boolean {
 export function resetBank(): void {
   bank.drops = 0;
   bank.shown = 0;
-  boost.overdrive = 0;
-  boost.tankStacks = 0;
+  sinks.power = 0;
+  sinks.tanks = 0;
+  sinks.reservoir = 0;
 }
 
-/** Paid power: OVERDRIVE seconds remaining, and BIG TANKS stacks. */
-export const boost = {
-  /** Seconds of double ball damage remaining. */
-  overdrive: 0,
-  /** Each stack adds 4 balls to every fresh tank. */
-  tankStacks: 0,
+/** Bought stat levels — permanent for the run, price climbing per level. */
+export const sinks = {
+  power: 0, // +15% base ball damage each
+  tanks: 0, // +3 balls per fresh tank each
+  reservoir: 0, // +60 tower max juice each
 };
+
+/** The next level's price for a sink. */
+export function sinkCost(baseCost: number, level: number): number {
+  return Math.round(baseCost * Math.pow(SINK_COST_GROWTH, level));
+}
 
 /** A turret standing in the room. */
 export interface PlacedTurret {

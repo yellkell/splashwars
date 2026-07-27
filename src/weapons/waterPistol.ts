@@ -91,9 +91,11 @@ export function createWaterPistol(): WaterPistolRig {
     stripe.position.set(side * 0.0215, 0.058, -0.05);
     group.add(stripe);
   }
-  // Low-profile red fin sight, swept back like a spoiler.
-  const fin = new Mesh(new BoxGeometry(0.006, 0.016, 0.045), accentMat);
-  fin.position.set(0, 0.086, -0.105);
+  // Low-profile red fin sight, swept back like a spoiler. It rides the
+  // barrel root, forward of the tank — the tank capsule reaches to about
+  // z -0.134 / y 0.084, and a fin under the bottle pierced the glass.
+  const fin = new Mesh(new BoxGeometry(0.005, 0.018, 0.042), accentMat);
+  fin.position.set(0, 0.082, -0.168);
   fin.rotation.x = -0.18;
   group.add(fin);
 

@@ -5,8 +5,9 @@
  */
 
 import { Vector3 } from 'three';
-import { TOWER } from '../config.js';
+import { SINK_RESERVOIR_PER_LEVEL, TOWER } from '../config.js';
 import { run } from './run.js';
+import { sinks } from './shop.js';
 
 export const tower = {
   /** True once the player has planted it this session (survives AGAIN). */
@@ -22,9 +23,11 @@ export const tower = {
   },
 };
 
-/** Fresh tank of health for a new run (position is kept). */
+/** Fresh tank of health for a new run (position is kept). RESERVOIR sink
+ * levels persist for the run and raise the ceiling. */
 export function resetTower(): void {
-  tower.health = TOWER.maxHealth;
+  tower.maxHealth = TOWER.maxHealth + sinks.reservoir * SINK_RESERVOIR_PER_LEVEL;
+  tower.health = tower.maxHealth;
   tower.hitFlash = 0;
 }
 

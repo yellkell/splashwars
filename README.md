@@ -111,10 +111,12 @@ no models, no textures, no sounds shipped.
   auto-firing tripod that locks a target, slews its head onto it at a
   finite turn rate and only fires once aligned), CHILLER (250 — an icy
   field that halves the speed of everything inside its floor ring), PUMP
-  (350 — trickles juice back into the tower). Bottom row, consumables:
-  TOP-UP (100 — 80 juice straight into the reservoir), OVERDRIVE (200 —
-  20 s of double ball damage, countdown on the watch), BIG TANKS (150,
-  stacking — every fresh pistol carries 4 more balls). Cards you can't
+  (350 — trickles juice back into the tower). Bottom row, permanent money
+  sinks that level base stats forever, each card wearing its LV badge:
+  POWER (+15% ball damage per level), BIG TANKS (+3 balls in every fresh
+  pistol per level), RESERVOIR (+60 tower capacity per level, filled on
+  purchase). Every level bought multiplies that sink's price by 1.5, so
+  late-game DROPS always have somewhere to go. Cards you can't
   afford shake their juice off with a dead buzz. Buying a turret hands you
   a ghost that glides on your gaze — trigger plants it, exactly like the
   tower. The fight does not pause: shopping under pressure is the game.
