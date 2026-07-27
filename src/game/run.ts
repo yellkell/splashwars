@@ -79,7 +79,7 @@ export const UPGRADE_CATALOGUE: UpgradeDef[] = [
     blurb: 'Balls burst, spattering everything nearby',
     color: '#b9a8ff',
     max: 6,
-    effect: (s) => (s === 0 ? 'Balls deal burst damage' : '+splash radius'),
+    effect: (s) => (s === 0 ? 'Balls deal burst damage' : '+burst radius'),
   },
 ];
 

@@ -65,7 +65,7 @@ no models, no textures, no sounds shipped.
 - **Gloss everywhere** — juice is WET: Blinn-Phong glints on the tank
   liquid and on enemy coverage, near-zero-roughness clearcoat on balls and
   orbiter globes, lit low-roughness floor splats that catch the scene's
-  lights, and a baked wet highlight in every splat and card splash.
+  lights, and a baked wet highlight in every splat and card splodge.
 - **A swarm built for thousands** — one InstancedMesh per enemy kind, all
   sharing a single shader; juice coverage is per-instance (noise-masked,
   dripping top-down, with a hot wet glint), so a thousand individually
@@ -150,7 +150,7 @@ src/
   game/appState.ts        title -> playing -> gameover flow
   ui/cardBoard.ts         the ONE menu primitive: shoot-to-pick cards
   systems/                WeaponSystem (draw/fire/drain/throw/slosh),
-                          JuiceSystem (ball flight, hits, splash, splats),
+                          JuiceSystem (ball flight, hits, bursts, splats),
                           EnemySystem (waves, AI, threat, deaths, blasts),
                           UpgradeSystem (between-wave offers),
                           MenuSystem (title + game-over boards),
@@ -170,7 +170,7 @@ src/
 digits all live in typed-array slots rendered through instanced meshes — at
 swarm scale, per-entity Groups and materials would sink the frame budget.
 Only the two pistols are entities. Enemy state has exactly one writer
-(`EnemySystem`); everything else — splash, juice bombs, orbiters — requests
+(`EnemySystem`); everything else — bursts, juice bombs, orbiters — requests
 damage over the juice bus.
 
 In dev (`npm run dev`) the game exposes `window.SPLASH` — `stats()`,
