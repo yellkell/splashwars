@@ -302,6 +302,78 @@ export const ENEMY_SHOT = {
 };
 
 /**
+ * THE SHOP — the tower-defense economy. Kills pay DROPS (gold popups beside
+ * the damage numbers, a rolling counter on your wrist watch). Press Y (the
+ * button on your left wrist) any time mid-battle to raise the shop board,
+ * SHOOT the turret you want to buy it, then plant its ghost like you
+ * planted the tower. The fight does not pause: shopping under pressure is
+ * the game.
+ */
+export const SHOP = {
+  toggleHand: 0 as 0 | 1, // the watch hand (left) — Y opens the shop
+  maxTurrets: 8,
+  waveClearBonus: 25, // drops per wave number on clear (wave 3 -> +75)
+  boardDistance: 1.7,
+  boardHeight: 1.35,
+};
+
+export const TurretKind = {
+  Sprinkler: 'sprinkler',
+  Chiller: 'chiller',
+  Pump: 'pump',
+} as const;
+export type TurretKindId = (typeof TurretKind)[keyof typeof TurretKind];
+
+export interface TurretDef {
+  id: TurretKindId;
+  name: string;
+  blurb: string;
+  cost: number;
+  color: string;
+}
+
+export const TURRET_DEFS: TurretDef[] = [
+  {
+    id: TurretKind.Sprinkler,
+    name: 'SPRINKLER',
+    blurb: 'Auto-fires juice balls at the nearest machine',
+    cost: 150,
+    color: '#e0312e',
+  },
+  {
+    id: TurretKind.Chiller,
+    name: 'CHILLER',
+    blurb: 'An icy field that slows everything inside it',
+    cost: 250,
+    color: '#53c8ec',
+  },
+  {
+    id: TurretKind.Pump,
+    name: 'PUMP',
+    blurb: 'Slowly pumps juice back into the tower',
+    cost: 350,
+    color: '#8fd6a8',
+  },
+];
+
+/** Turret behaviour tuning. */
+export const TURRET = {
+  sprinkler: {
+    range: 5.0,
+    rate: 1.3, // balls per second
+    damageMult: 0.5, // fraction of the pistol ball's damage
+    muzzleSpeed: 8.0,
+  },
+  chiller: {
+    radius: 1.9,
+    slowTo: 0.45, // speed multiplier inside the field
+  },
+  pump: {
+    healPerSec: 2.5,
+  },
+};
+
+/**
  * Upgrades — between every wave you're offered three at random and you PICK
  * BY SHOOTING the one you want (no menus in VR: juice the card you want).
  * Each can stack; `max` caps the stack.

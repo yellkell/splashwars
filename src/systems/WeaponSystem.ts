@@ -32,6 +32,7 @@ import { dropletBurst, stampSplat } from '../fx/juice.js';
 import { pulseHand } from '../input/haptics.js';
 import { run, UpgradeId } from '../game/run.js';
 import { app } from '../game/appState.js';
+import { build } from '../game/shop.js';
 import * as sfx from '../audio/sfx.js';
 import { AOE, AUTO, HOLSTER, PISTOL } from '../config.js';
 
@@ -219,9 +220,9 @@ export class WeaponSystem extends createSystem({
     this.firingWas[hand] = firing;
     rig.setTriggerPull(Math.max(pull, pressed ? 1 : 0));
 
-    // While the tower ghost is out, the trigger is the PLACE button — don't
-    // also squirt juice over the spot you're choosing.
-    if (app.phase === 'placing') return;
+    // While the tower's or a turret's ghost is out, the trigger is the
+    // PLACE button — don't also squirt juice over the spot you're choosing.
+    if (app.phase === 'placing' || build.placing) return;
 
     let ammo = e.getValue(WaterPistol, 'ammo') ?? 1;
     const drain = 1 / PISTOL.shotsPerTank;

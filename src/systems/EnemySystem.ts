@@ -29,7 +29,11 @@ import { enemyShot, pendingBlasts, recycleBlast } from '../combat/juiceBus.js';
 import { run } from '../game/run.js';
 import { damageTower, tower } from '../game/tower.js';
 import { app } from '../game/appState.js';
+import { addDrops, placedTurrets } from '../game/shop.js';
 import * as sfx from '../audio/sfx.js';
+import { SHOP as SHOP_CFG } from '../config.js';
+
+const SHOP_BONUS = SHOP_CFG.waveClearBonus;
 import {
   ENEMY,
   ENEMY_SHOT,
@@ -37,6 +41,8 @@ import {
   EnemyKind,
   PALETTE,
   TOWER,
+  TURRET,
+  TurretKind,
   WAVES,
   WAVE_ROSTER,
   type EnemyKindId,
@@ -66,6 +72,8 @@ export class EnemySystem extends createSystem({}) {
   private toSpawn = 0;
   private spawnAcc = 0;
   private time = 0;
+  private coinStreak = 0;
+  private sinceCoin = 99;
 
   // The floating wave sign.
   private sign!: Mesh;
@@ -120,6 +128,7 @@ export class EnemySystem extends createSystem({}) {
 
   update(delta: number): void {
     this.time += delta;
+    this.sinceCoin += delta;
     const swarm = this.swarm;
 
     this.world.camera.getWorldPosition(_head);
@@ -210,6 +219,18 @@ export class EnemySystem extends createSystem({}) {
           lateral = Math.sin(this.time * 2.6 + swarm.phase[i]) * 0.45;
           break;
         // Clods and THE DROUGHT just PLOW: dead straight, inevitable.
+      }
+
+      // CHILLER fields: half-speed inside any icy circle (few turrets,
+      // so a plain loop beats touching the grid).
+      for (const t of placedTurrets) {
+        if (t.kind !== TurretKind.Chiller) continue;
+        const cdx = swarm.px[i] - t.pos.x;
+        const cdz = swarm.pz[i] - t.pos.z;
+        if (cdx * cdx + cdz * cdz <= TURRET.chiller.radius * TURRET.chiller.radius) {
+          speed *= TURRET.chiller.slowTo;
+          break;
+        }
       }
 
       // Freeze forward motion during an attack so the lunge reads clean;
@@ -358,6 +379,15 @@ export class EnemySystem extends createSystem({}) {
     run.score += def.score;
     run.kills += 1;
 
+    // --- Payday: kills mint DROPS, with a gold popup riding beside the
+    // damage numbers and a coin blip that pitches up on a hot streak. ---
+    addDrops(def.score);
+    _pos.set(swarm.px[i] + 0.14, swarm.py[i] + swarm.radius[i] * 0.9 + 0.12, swarm.pz[i]);
+    popDamage(_pos, def.score, false, 0xffd23f);
+    this.coinStreak = this.sinceCoin < 1.4 ? this.coinStreak + 1 : 0;
+    this.sinceCoin = 0;
+    sfx.coin(this.coinStreak);
+
     // Shot down a thief: every stolen drop goes back in the reservoir.
     if (swarm.carrying[i] > 0 && tower.health > 0) {
       tower.health = Math.min(tower.maxHealth, tower.health + swarm.carrying[i]);
@@ -444,6 +474,8 @@ export class EnemySystem extends createSystem({}) {
   }
 
   private finishWave(): void {
+    // Clear bonus: the later the wave, the fatter the payout.
+    addDrops(WAVES.count >= run.wave ? SHOP_BONUS * run.wave : 0);
     if (run.wave >= WAVES.count) {
       this.setSign('ALL WAVES CLEARED — LOOPING, HARDER', '#f0299b');
       run.wave = 0;

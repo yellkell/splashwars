@@ -100,6 +100,18 @@ no models, no textures, no sounds shipped.
   same clipped-liquid shader as the pistol tanks), and strikes jolt the
   surface. AGAIN after a wipe keeps your spot; MENU lifts the tower for a
   fresh placement.
+- **The economy: DROPS and the wrist shop** — kills mint DROPS (a gold
+  "+10" pops beside the damage number, pitched coin blips on streaks, and
+  a wave-clear bonus that grows with the wave). A smoked-glass WATCH on
+  your left wrist shows the balance on a rolling odometer. Press Y — the
+  button on your watch wrist — any time mid-battle and the shop board
+  flips up: SPRINKLER (150, an auto-firing tripod that lobs the same juice
+  balls you do), CHILLER (250, an icy field that halves the speed of
+  everything inside its floor ring), PUMP (350, trickles juice back into
+  the tower). Cards you can't afford shake their juice off with a dead
+  buzz. Buying hands you a ghost that glides on your gaze — trigger plants
+  it, exactly like the tower. The fight does not pause: shopping under
+  pressure is the game.
 - **Menus you shoot** — the game has exactly one interaction verb. The
   title screen is a HOW TO PLAY plate over a big START card: draw and shoot
   it to begin. Losing brings a WIPED OUT / TOWER DRAINED plate (wave / pops
@@ -155,11 +167,14 @@ src/
   components/             ECS data: WaterPistol
   game/appState.ts        title -> playing -> gameover flow
   ui/cardBoard.ts         the ONE menu primitive: shoot-to-pick cards
+  game/shop.ts            the bank (DROPS), placed turrets, build state
   systems/                WeaponSystem (draw/fire/drain/throw/slosh),
                           JuiceSystem (ball flight, hits, bursts, splats),
                           EnemySystem (waves, AI, threat, deaths, blasts),
                           UpgradeSystem (between-wave offers),
                           MenuSystem (title + game-over boards),
+                          TowerSystem (ghost placement, reservoir, wobble),
+                          TurretSystem (watch, shop, turrets),
                           PlayerSystem (health, visor, orbiters, death)
   weapons/waterPistol.ts  the procedural pistol build (primitives only)
   materials/              plastic PBR helpers + the clipped-liquid shader

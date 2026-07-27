@@ -200,6 +200,34 @@ export function placeTower(): void {
   setTimeout(() => blip(140, 320, 0.25, 0.16), 180);
 }
 
+/** Drops earned — a bright little coin blip, pitched up on streaks. */
+export function coin(step = 0): void {
+  const f = 780 * Math.pow(1.06, Math.min(step, 12));
+  blip(f, f * 1.5, 0.08, 0.12, 'triangle');
+}
+
+/** The shop board flipping up / away. */
+export function shopToggle(open: boolean): void {
+  blip(open ? 320 : 520, open ? 520 : 320, 0.12, 0.14, 'triangle');
+}
+
+/** A purchase — plastic cha-ching. */
+export function buy(): void {
+  blip(660, 990, 0.1, 0.2, 'triangle');
+  setTimeout(() => blip(880, 1320, 0.14, 0.2, 'triangle'), 90);
+  noiseBurst(2400, 2.0, 0.1, 0.08, 4000);
+}
+
+/** Not enough drops — a flat dead buzz. */
+export function denied(): void {
+  blip(180, 140, 0.18, 0.2, 'square');
+}
+
+/** A turret firing — a lighter cousin of your own squirt. */
+export function turretShot(): void {
+  noiseBurst(2600, 1.8, 0.06, 0.1, 1200);
+}
+
 /** Stolen juice pouring back into the reservoir — a happy triple glug. */
 export function refund(): void {
   blip(180, 420, 0.12, 0.16);

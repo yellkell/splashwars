@@ -20,9 +20,11 @@ import { UpgradeSystem } from './systems/UpgradeSystem.js';
 import { PlayerSystem } from './systems/PlayerSystem.js';
 import { MenuSystem } from './systems/MenuSystem.js';
 import { TowerSystem } from './systems/TowerSystem.js';
+import { TurretSystem } from './systems/TurretSystem.js';
 import { run } from './game/run.js';
 import { app } from './game/appState.js';
 import { tower as towerState } from './game/tower.js';
+import { addDrops as debugAddDrops, bank, placedTurrets } from './game/shop.js';
 import { WaterPistol } from './components/WaterPistol.js';
 import { debugLiveDigits, debugNumbersInstance, popDamage } from './fx/damageNumbers.js';
 import { Vector3 as DebugVec3 } from 'three';
@@ -62,6 +64,7 @@ World.create(container, {
   world.registerSystem(UpgradeSystem);
   world.registerSystem(MenuSystem);
   world.registerSystem(TowerSystem);
+  world.registerSystem(TurretSystem);
   world.registerSystem(WeaponSystem);
   world.registerSystem(JuiceSystem);
   world.registerSystem(PlayerSystem);
@@ -97,6 +100,10 @@ World.create(container, {
         pos: [+towerState.pos.x.toFixed(2), +towerState.pos.z.toFixed(2)],
       }),
       appPhase: () => app.phase,
+      drops: () => ({ drops: bank.drops, shown: Math.round(bank.shown), turrets: placedTurrets.map((t) => t.kind) }),
+      addDrops: (n = 500) => debugAddDrops(n),
+      buyTurret: (kind = 'sprinkler', x = 0.8, z = -1.2) =>
+        world.getSystem(TurretSystem)?.placeTurret(kind as never, new DebugVec3(x, 0, z)),
       pistols: () => {
         const ws = world.getSystem(WeaponSystem);
         if (!ws) return [];

@@ -66,6 +66,7 @@ export class CardBoard {
   private board = new Group();
   private cards: Card[] = [];
   private onPick: ((id: string) => void) | undefined;
+  private canPick: ((id: string) => boolean) | undefined;
   private time = 0;
 
   constructor(private scene: Scene) {
@@ -79,10 +80,18 @@ export class CardBoard {
 
   show(
     specs: CardSpec[],
-    opts: { y?: number; distance?: number; onPick: (id: string) => void },
+    opts: {
+      y?: number;
+      distance?: number;
+      onPick: (id: string) => void;
+      /** Gate a pick (e.g. affordability). Denied cards shake off their
+       * juice and stay on the board instead of resolving. */
+      canPick?: (id: string) => boolean;
+    },
   ): void {
     this.clear();
     this.onPick = opts.onPick;
+    this.canPick = opts.canPick;
 
     // Lay the row out around centre, respecting per-card scale.
     const widths = specs.map((s) => UPGRADES.cardWidth * (s.scale ?? 1));
@@ -187,6 +196,14 @@ export class CardBoard {
 
     if (card.fill >= UPGRADES.juiceToPick) {
       const id = card.spec.id;
+      if (this.canPick && !this.canPick(id)) {
+        // Can't afford it: the card shakes the juice off and stays up.
+        card.splats.length = 0;
+        card.fill = 0;
+        this.drawCard(card);
+        sfx.denied();
+        return;
+      }
       const pick = this.onPick;
       this.hide();
       sfx.upgradePick();

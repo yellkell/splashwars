@@ -19,6 +19,8 @@ import { CardBoard } from '../ui/cardBoard.js';
 import { app } from '../game/appState.js';
 import { resetRun, run } from '../game/run.js';
 import { resetTower, tower } from '../game/tower.js';
+import { resetBank } from '../game/shop.js';
+import { TurretSystem } from './TurretSystem.js';
 import { EnemySystem } from './EnemySystem.js';
 import * as sfx from '../audio/sfx.js';
 
@@ -44,6 +46,8 @@ export class MenuSystem extends createSystem({}) {
    */
   startRun(): void {
     resetRun();
+    resetBank();
+    this.world.getSystem(TurretSystem)?.resetField();
     this.board.hide();
     this.plate.visible = false;
     this.shownFor = '';
