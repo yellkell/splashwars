@@ -200,6 +200,13 @@ export function placeTower(): void {
   setTimeout(() => blip(140, 320, 0.25, 0.16), 180);
 }
 
+/** Stolen juice pouring back into the reservoir — a happy triple glug. */
+export function refund(): void {
+  blip(180, 420, 0.12, 0.16);
+  setTimeout(() => blip(240, 520, 0.12, 0.16), 100);
+  setTimeout(() => blip(300, 640, 0.16, 0.18), 200);
+}
+
 /** An enemy winding up — a rising squeak so you HEAR the telegraph. */
 export function enemyWindup(): void {
   blip(380, 760, 0.22, 0.09, 'triangle');

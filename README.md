@@ -2,16 +2,19 @@
 
 Tower-defense JUICE fighting in WebXR passthrough. A ghost JUICE TOWER
 follows your gaze across your real floor — pull the trigger and it PLANTS,
-and every wave of THE THIRST comes for it: parched, faceted husk-creatures
-with glowing eyes, crawled out of somewhere waterless to drain your
-reservoir. Husks tumble in surges, Skitters dart in zigzags, Spitters lob
-from range, Clods bulldoze dead straight. You are the defense: a sleek
+and every wave of THE THIRST comes for it — the rival team's DRINKING
+MACHINES: sleek hover-drones in the same competition-plastic kit as your
+pistols, white shells with violet team trim, each built around one big
+glowing lens and a drinking apparatus. Sippers drink from the tower and
+FLEE with the juice — shoot the thief down before it escapes and every
+drop goes back in the reservoir. Zippers dart in zigzags, Spouts lob from
+range, Chuggers bulldoze dead straight. You are the defense: a sleek
 white-and-red sports pistol rides each hip. Squeeze your grip near a
 holster to **draw**, then pull the trigger — SEMI-AUTO, one fat orb of
 vivid magenta juice per press, on that very frame. Juice lands as layered
-splats on your real floor and as glossy creeping coverage on the husks'
-dry crust — the dry-vs-wet contrast is the game's whole visual language —
-and a fully juiced husk bursts. Every attack is TELEGRAPHED: a husk rears
+splats on your real floor and as glossy creeping coverage over their white
+shells — your colour claiming their kit — and a fully juiced machine
+bursts. Every attack is TELEGRAPHED: a machine rears
 back, crouches, and SNAPS at the tower — the hit lands exactly at the
 snap, and bursting it mid-windup cancels the attack. Juice balls fly
 Blaston-slow — quick enough that you'd have to dodge one — and enemy
@@ -31,10 +34,11 @@ the juice is the UI, in your guns, on the husks, in the tower, on your
 visor.
 
 Where FIRE FIGHT (iron-balls-boxing) was metal — gunmetal, hazard amber,
-anvil clangs — SPLASH WARS is **glossy plastic and beautiful liquid against
-dry, cracked husks**: injection-moulded clearcoat shells, pastel poolside
-light, and a fully synthesised soundscape of squirts, plops, glugs and toy
-clicks (no audio assets — everything is WebAudio at runtime).
+anvil clangs — SPLASH WARS is **a televised juice sport**: two kits of
+glossy competition plastic (your white/red versus their white/violet),
+beautiful liquid everywhere, pastel poolside light, and a fully
+synthesised soundscape of squirts, plops, glugs and toy clicks (no audio
+assets — everything is WebAudio at runtime).
 
 Built on Meta's [Immersive Web SDK](https://iwsdk.dev/) (Three.js + ECS),
 same stack and architecture as FIRE FIGHT. Everything is procedural —
@@ -72,18 +76,20 @@ no models, no textures, no sounds shipped.
   half-juiced husks still cost six draw calls. A uniform spatial grid keeps
   ball-vs-enemy and blast queries near-constant instead of
   O(balls x enemies).
-- **THE THIRST** — the enemy roster: dry, matte, faceted husk-creatures
-  (non-indexed low-poly solids, per-face normals) whose glowing eyes are
-  the only bright thing on them until your juice hits. **Husks** (crystal
-  boulders, the crowd), **Skitters** (spiked shards, fast, one-hit pops),
-  **Spitters** (leaning obelisks that lob from range — deliberately scarce
-  and soft, capped at ~a fifth of any squad), **Clods** (rubble golems,
-  the tanks), **Clusters** (shard aggregates that burst into Skitters),
-  and **THE DROUGHT** (a wave-10 crowned monolith). Merged primitives with
-  a colour-role attribute (body/crust/glow/maw), one InstancedMesh per
-  kind — six draw calls at any crowd size — with per-kind movement
-  personalities and telegraphed rear-back-and-snap attacks. **Everything
-  comes from the front 180°** and is held there.
+- **THE THIRST** — the rival team's drinking machines, in the pistols'
+  own design language: glossy white shells, violet team trim, smoked
+  intakes, one big glowing lens recessed in a dark socket. **Sippers**
+  (drinker drones with straws — they steal juice and RUN; kill the thief
+  and the tower gets it back), **Zippers** (dart interceptors), **Spouts**
+  (mortar drones, deliberately scarce and soft), **Chuggers** (armoured
+  barrels), **Pods** (carrier shells that burst into Zippers), and
+  **THE GULP** (a wave-10 industrial drinker crowned with straws). Rotor
+  rings spin, fins bob and lenses breathe via per-part vertex-shader
+  animation phase-offset per instance; machines bank into turns, swoop in
+  on arrival, and rear-back-and-snap on telegraphed attacks. Fresnel rim
+  light and two-tone ramp shading lift every silhouette off the room.
+  One InstancedMesh per kind — six draw calls at any crowd size — and
+  **everything comes from the front 180°**.
 - **Health without a HUD** — damage throws juice across your **visor**; it
   thickens as you weaken and washes off as you recover. Same philosophy as
   the ammo: read the juice, not a number.

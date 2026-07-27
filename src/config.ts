@@ -167,6 +167,15 @@ export const ENEMY = {
    */
   attackDuration: 0.9, // seconds for the whole windup-snap-recover
   attackStrikeAt: 0.45, // anim position (1→0) where the hit actually lands
+  /**
+   * THE STEAL: a Sipper that lands its drink doesn't just damage the tower
+   * — it fills up and RUNS FOR THE EXIT with the juice. Kill it before it
+   * escapes and the tower gets every drop back. Turns every landed hit
+   * into a recoverable event and every fleeing machine into a priority
+   * target you FEEL good about running down.
+   */
+  fleeSpeedMult: 1.9, // how much faster a laden Sipper runs
+  escapeRadius: 9.0, // it despawns (juice lost) past this distance
 };
 
 /**
@@ -184,12 +193,12 @@ export const ENEMY = {
  * threat comes from volume and the Big Ducks, not from bullet sponges.
  */
 export const EnemyKind = {
-  Drifter: 0, // "Husk" — parched crystal boulder, the crowd
-  Scurrier: 1, // "Skitter" — small spiked shard, fast, one-hit pop
-  Lobber: 2, // "Spitter" — leaning obelisk that lobs from range
-  Brute: 3, // "Clod" — rubble golem, big, tanky, hits hard
-  Splitter: 4, // "Cluster" — shard aggregate that bursts into Skitters
-  Boss: 5, // "THE DROUGHT" — the wave-10 crowned monolith
+  Drifter: 0, // "Sipper" — drinker drone: steals juice and RUNS with it
+  Scurrier: 1, // "Zipper" — fast dart interceptor, one-hit pop
+  Lobber: 2, // "Spout" — squat mortar drone, lobs from range
+  Brute: 3, // "Chugger" — armoured barrel, will not stop
+  Splitter: 4, // "Pod" — carrier shell that bursts into Zippers
+  Boss: 5, // "THE GULP" — the wave-10 industrial drinker
 } as const;
 export type EnemyKindId = (typeof EnemyKind)[keyof typeof EnemyKind];
 
@@ -198,9 +207,9 @@ export interface EnemyTypeDef {
   radius: number;
   hp: number;
   speed: number; // multiplier on the wave's base speed
-  tint: number; // dry crust colour (before your juice covers it)
-  accent: number; // darker crust: spikes, plates, the boss's crown
-  glow: number; // the eyes' emissive colour
+  tint: number; // shell colour (competition white, before your juice)
+  accent: number; // team-violet trim: stripes, rotors, plates
+  glow: number; // the lens colour
   attack: number; // damage per hit on the player
   attackInterval: number; // seconds between its attacks
   ranged: boolean; // true = throws at you instead of touching you
@@ -211,35 +220,35 @@ export interface EnemyTypeDef {
 
 export const ENEMY_TYPES: Record<EnemyKindId, EnemyTypeDef> = {
   [EnemyKind.Drifter]: {
-    name: 'Husk', radius: 0.19, hp: 72, speed: 1, tint: 0xcfc4b0,
-    accent: 0x8a7f6c, glow: 0xffb03f,
-    attack: 3, attackInterval: 2.0, ranged: false, score: 10,
+    name: 'Sipper', radius: 0.19, hp: 72, speed: 1, tint: 0xf2f5f9,
+    accent: 0x8f76e8, glow: 0xd8ccff,
+    attack: 4, attackInterval: 2.0, ranged: false, score: 10,
   },
   [EnemyKind.Scurrier]: {
-    name: 'Skitter', radius: 0.12, hp: 34, speed: 2.05, tint: 0xb8bfd0,
-    accent: 0x707a91, glow: 0x9ff2ff,
+    name: 'Zipper', radius: 0.12, hp: 34, speed: 2.05, tint: 0xf2f5f9,
+    accent: 0x6fd6f2, glow: 0xbdf3ff,
     attack: 2, attackInterval: 1.5, ranged: false, score: 15,
   },
   [EnemyKind.Lobber]: {
     // The ranged threat — deliberately SOFT: it chips, it doesn't shell.
-    name: 'Spitter', radius: 0.22, hp: 90, speed: 0.72, tint: 0x9a8fb8,
-    accent: 0x5f5480, glow: 0x7b5cff,
+    name: 'Spout', radius: 0.22, hp: 90, speed: 0.72, tint: 0xf2f5f9,
+    accent: 0x7b5cff, glow: 0xcdbcff,
     attack: 3, attackInterval: 4.4, ranged: true, score: 25,
   },
   [EnemyKind.Brute]: {
-    name: 'Clod', radius: 0.36, hp: 300, speed: 0.5, tint: 0x93998f,
-    accent: 0x5c6158, glow: 0xffb03f,
+    name: 'Chugger', radius: 0.36, hp: 300, speed: 0.5, tint: 0xe8ecf2,
+    accent: 0x5f4ab8, glow: 0xffb03f,
     attack: 9, attackInterval: 2.2, ranged: false, score: 50,
   },
   [EnemyKind.Splitter]: {
-    name: 'Cluster', radius: 0.26, hp: 120, speed: 0.85, tint: 0xd9d2c4,
-    accent: 0x9a917e, glow: 0xff8a5c,
+    name: 'Pod', radius: 0.26, hp: 120, speed: 0.85, tint: 0xf2f5f9,
+    accent: 0x9a86f0, glow: 0xd8ccff,
     attack: 4, attackInterval: 2.0, ranged: false,
     splitInto: EnemyKind.Scurrier, splitCount: 4, score: 30,
   },
   [EnemyKind.Boss]: {
-    name: 'THE DROUGHT', radius: 0.75, hp: 3600, speed: 0.34, tint: 0x6e6459,
-    accent: 0x3f3831, glow: 0xff4d3d,
+    name: 'THE GULP', radius: 0.75, hp: 3600, speed: 0.34, tint: 0xe8ecf2,
+    accent: 0x4b3aa0, glow: 0xff4d3d,
     attack: 8, attackInterval: 2.6, ranged: true, score: 500,
   },
 };

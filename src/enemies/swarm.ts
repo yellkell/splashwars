@@ -1,19 +1,21 @@
 /**
  * THE SWARM — every enemy in the game, in six draw calls.
  *
- * Creative direction lives in enemies/geometry.ts (THE THIRST — parched
- * faceted husk-creatures); this file makes it scale. One InstancedMesh PER
- * KIND, all sharing a single shader:
+ * Creative direction lives in enemies/geometry.ts (THE THIRST — the rival
+ * team's drinking machines); this file makes it scale AND makes it read as
+ * finished hardware. One InstancedMesh PER KIND, all sharing a shader with:
  *
- *  - vertex `aRole` colours parts: body (matte per-instance tint), accent
- *    (darker crust), GLOW (emissive eyes, per-kind colour) and maw (dark
- *    hollows) — real geometry, no textures;
- *  - juice coverage is per-instance: the noise-masked, top-down drip mask
- *    covers each husk individually as it takes damage. The bodies are DRY
- *    and matte; the juice is glossy-wet with a hot Blinn-Phong glint — the
- *    dry-vs-wet contrast is the game's whole visual sentence;
- *  - instances yaw to face the tower via their matrix, squash-and-stretch
- *    when hit, and rear-back/snap on their attack telegraph.
+ *  - role colouring: white shell (takes juice coverage), team-violet
+ *    accents, emissive lenses, smoked intakes;
+ *  - PER-PART ANIMATION in the vertex shader (`aPart`): rotor rings spin,
+ *    fins bob, lenses breathe — phase-offset per instance via aSeed, so a
+ *    hundred machines never move in lockstep and every one is alive even
+ *    while the AI just glides it;
+ *  - two-tone ramp lighting + a cool FRESNEL RIM so silhouettes separate
+ *    from the room like graded footage, plus hot gloss on the shells and a
+ *    hotter glint on juice coverage;
+ *  - instances yaw to face the tower, BANK into lateral motion (the roll
+ *    array), squash on hits and rear-back/snap on the attack telegraph.
  *
  * State stays structure-of-arrays over GLOBAL slots (the rest of the game
  * addresses enemies by slot); each slot additionally owns a compact LOCAL
@@ -55,14 +57,18 @@ const _q = new Quaternion();
 const _p = new Vector3();
 const _s = new Vector3();
 const _c = new Color();
+const _q2 = new Quaternion();
 const UP = new Vector3(0, 1, 0);
+const FWD = new Vector3(0, 0, 1);
 
 // ---------------------------------------------------------------------------
 // The shader: role-coloured plastic + stripes + glossy juice coverage.
 // ---------------------------------------------------------------------------
 
 const VERT = /* glsl */ `
+  uniform float uTime;
   attribute float aRole;
+  attribute float aPart;
   attribute float aCoverage;
   attribute float aSeed;
   attribute vec3 aTint;
@@ -74,14 +80,32 @@ const VERT = /* glsl */ `
   varying float vSeed;
   varying vec3 vTint;
   void main(){
+    vec3 p = position;
+    vec3 nrm = normal;
+
+    // --- Per-part life, phase-offset per machine via aSeed. ---
+    if (aPart > 0.5 && aPart < 1.5) {
+      // Rotor: spin about the machine's vertical axis.
+      float a = uTime * 5.0 + aSeed * 6.28;
+      float c = cos(a), s = sin(a);
+      p = vec3(p.x * c - p.z * s, p.y, p.x * s + p.z * c);
+      nrm = vec3(nrm.x * c - nrm.z * s, nrm.y, nrm.x * s + nrm.z * c);
+    } else if (aPart > 1.5 && aPart < 2.5) {
+      // Bobber: fins/antennas float on their own beat.
+      p.y += sin(uTime * 3.2 + aSeed * 7.0 + position.x * 3.0) * 0.06;
+    } else if (aPart > 2.5) {
+      // Pulser: lenses and reservoirs breathe along their normals.
+      p += nrm * sin(uTime * 3.6 + aSeed * 9.0) * 0.03;
+    }
+
     vObjPos = position;
     vRole = aRole;
     vCoverage = aCoverage;
     vSeed = aSeed;
     vTint = aTint;
-    vec4 world = modelMatrix * instanceMatrix * vec4(position, 1.0);
+    vec4 world = modelMatrix * instanceMatrix * vec4(p, 1.0);
     vWorldPos = world.xyz;
-    vWorldNormal = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal);
+    vWorldNormal = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * nrm);
     gl_Position = projectionMatrix * viewMatrix * world;
   }
 `;
@@ -117,23 +141,29 @@ const FRAG = /* glsl */ `
     vec3 n = normalize(vWorldNormal);
     float up = clamp(n.y * 0.5 + 0.5, 0.0, 1.0);
 
-    // --- Base colour by vertex role. THE THIRST is DRY: matte, dusty,
-    // crusted — the only brightness on them is the glow of their eyes. ---
-    vec3 col =
-      vRole < 0.5 ? vTint * (0.5 + 0.5 * up) :
-      vRole < 1.5 ? uAccent * (0.5 + 0.42 * up) :
-      vRole < 2.5 ? uGlow * 1.7 :
-                    vec3(0.05, 0.05, 0.07);
-
+    // --- Two-tone ramp: warm key over cool sky ambient, like the rest of
+    // the game's plastic — these are the OTHER TEAM's machines, same sport.
     vec3 lightDir = normalize(vec3(0.35, 0.85, 0.4));
+    float key = max(dot(n, lightDir), 0.0);
+    vec3 ramp = mix(vec3(0.52, 0.56, 0.62), vec3(1.05, 1.02, 0.98), key * 0.75 + up * 0.25);
+
+    vec3 col =
+      vRole < 0.5 ? vTint * ramp :
+      vRole < 1.5 ? uAccent * ramp :
+      vRole < 2.5 ? uGlow * 1.8 :
+                    vec3(0.13, 0.14, 0.18) * ramp;
+
     vec3 viewDir = normalize(cameraPosition - vWorldPos);
     vec3 h = normalize(lightDir + viewDir);
     float specDot = max(dot(n, h), 0.0);
-    // Barely any sheen on the dry crust — they don't shine, they crave.
-    if (vRole < 1.5) col += pow(specDot, 24.0) * 0.05;
+    // Glossy competition shells — the pistols' finish, in their colours.
+    if (vRole < 1.5) col += pow(specDot, 55.0) * 0.5;
+    // Cool fresnel rim: lifts every silhouette off the passthrough room.
+    float rim = pow(1.0 - abs(dot(n, viewDir)), 3.0);
+    if (vRole < 2.5) col += vec3(0.35, 0.55, 0.75) * rim * 0.3;
 
     // --- Juice coverage: noise splotches, dripping from the top down. ---
-    // (Skip the glow so the eyes burn through until the very end.)
+    // (Skip the glow so the lens burns through until the very end.)
     if (vRole < 1.5 || vRole > 2.5) {
       float splotch = vnoise(vObjPos * 6.0 + vSeed * 31.0) * 0.6
                     + vnoise(vObjPos * 15.0 + vSeed * 17.0) * 0.4;
@@ -222,6 +252,7 @@ class KindBlock {
 
     const mat = new ShaderMaterial({
       uniforms: {
+        uTime: { value: 0 },
         uJuice: { value: new Color(juice) },
         uJuiceDeep: { value: new Color(juiceDeep) },
         uAccent: { value: new Color(def.accent) },
@@ -283,6 +314,14 @@ export class Swarm {
    * at the snap. 0 = not attacking.
    */
   readonly attackAnim = new Float32Array(MAX_ENEMIES);
+  /** Banking roll (radians) — drones lean into lateral motion. */
+  readonly roll = new Float32Array(MAX_ENEMIES);
+  /** Juice stolen from the tower and being carried away (Sippers). */
+  readonly carrying = new Float32Array(MAX_ENEMIES);
+  /** 1 while running for the exit with stolen juice. */
+  readonly fleeing = new Uint8Array(MAX_ENEMIES);
+  /** Arrival swoop, 1 → 0 over the first beat after spawn. */
+  readonly arrive = new Float32Array(MAX_ENEMIES);
   readonly strafeDir = new Int8Array(MAX_ENEMIES);
   /** This slot's instance index inside its kind's mesh. */
   private readonly local = new Int32Array(MAX_ENEMIES);
@@ -330,6 +369,10 @@ export class Swarm {
     this.cooldown[slot] = Math.random() * def.attackInterval;
     this.hitPulse[slot] = 0;
     this.attackAnim[slot] = 0;
+    this.roll[slot] = 0;
+    this.carrying[slot] = 0;
+    this.fleeing[slot] = 0;
+    this.arrive[slot] = 1;
     this.strafeDir[slot] = Math.random() < 0.5 ? -1 : 1;
     this.local[slot] = li;
 
@@ -414,11 +457,23 @@ export class Swarm {
         _p.x += (ddx / dd) * lunge * r;
         _p.z += (ddz / dd) * lunge * r;
       }
-      _s.set(r * (2 - wob), r * wob * 1.08, r * (2 - wob));
+      // Arrival swoop: drop in from above with a small scale pop.
+      const arr = this.arrive[i];
+      if (arr > 0) _p.y += arr * arr * 2.4;
+      const popIn = 1 - arr * 0.35;
+      _s.set(r * (2 - wob) * popIn, r * wob * 1.08 * popIn, r * (2 - wob) * popIn);
+      // Yaw toward the target, banked into the turn.
       _q.setFromAxisAngle(UP, this.facing[i]);
+      if (this.roll[i] !== 0) {
+        _q2.setFromAxisAngle(FWD, this.roll[i]);
+        _q.multiply(_q2);
+      }
       _m.compose(_p, _q, _s);
       block.mesh.setMatrixAt(this.local[i], _m);
     }
-    for (const k of ALL_KINDS) this.blocks[k].mesh.instanceMatrix.needsUpdate = true;
+    for (const k of ALL_KINDS) {
+      this.blocks[k].mesh.instanceMatrix.needsUpdate = true;
+      (this.blocks[k].mesh.material as ShaderMaterial).uniforms.uTime.value = time;
+    }
   }
 }

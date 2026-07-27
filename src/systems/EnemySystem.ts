@@ -9,13 +9,15 @@
  * writes swarm state, so all the AOE requests from elsewhere (splash, juice
  * bombs, orbiters) come in over the juice bus and are applied here.
  *
- * Behaviour by type (THE THIRST — see enemies/geometry.ts):
- *  - melee husks (Husks, Skitters, Clods, Clusters) close on the tower,
- *    crowd-separate, and drain it with telegraphed snaps;
- *  - Spitters hold at range and lob the same slow, dodgeable juice balls
- *    you use, so incoming fire is readable — kept scarce and soft;
- *  - Clusters burst into a spray of Skitters when killed;
- *  - THE DROUGHT is a wave-10 crowned monolith the size of a car.
+ * Behaviour by type (THE THIRST — the rival team's drinking machines,
+ * see enemies/geometry.ts):
+ *  - Sippers drink from the tower and FLEE with the juice — kill the
+ *    thief before it escapes and the tower gets every drop back;
+ *  - Zippers, Chuggers and Pods close in and strike with telegraphed
+ *    snaps; Pods burst into a flight of Zippers;
+ *  - Spouts hold at range and lob the same slow, dodgeable juice balls
+ *    you use — kept scarce and soft;
+ *  - THE GULP is a wave-10 industrial drinker the size of a car.
  */
 
 import { createSystem, Vector3 } from '@iwsdk/core';
@@ -166,12 +168,20 @@ export class EnemySystem extends createSystem({}) {
       const def = ENEMY_TYPES[kind];
       swarm.hitPulse[i] = Math.max(0, swarm.hitPulse[i] - delta * 4);
 
+      // Arrival swoop: no moving or attacking until it has dropped in.
+      if (swarm.arrive[i] > 0) {
+        swarm.arrive[i] = Math.max(0, swarm.arrive[i] - delta / 0.8);
+      }
+
+      const fleeing = swarm.fleeing[i] === 1;
       const dx = tx - swarm.px[i];
       const dz = tz - swarm.pz[i];
       const dist = Math.hypot(dx, dz) || 1e-3;
-      // Yaw so the geometry's -Z face looks at the tower (rotY(θ) maps -Z
-      // onto (-sinθ, -cosθ), so θ = atan2(-dx̂, -dẑ)).
-      swarm.facing[i] = Math.atan2(-dx / dist, -dz / dist);
+      // Yaw so the machine faces where it's going: at the tower normally,
+      // AWAY from it when fleeing with stolen juice.
+      swarm.facing[i] = fleeing
+        ? Math.atan2(dx / dist, dz / dist)
+        : Math.atan2(-dx / dist, -dz / dist);
 
       // Ranged types stop further out; melee press right up to the tower.
       const standoff = def.ranged
@@ -202,10 +212,21 @@ export class EnemySystem extends createSystem({}) {
         // Clods and THE DROUGHT just PLOW: dead straight, inevitable.
       }
 
-      // Freeze forward motion during an attack so the lunge reads clean.
-      if (swarm.attackAnim[i] > 0) speed = 0;
+      // Freeze forward motion during an attack so the lunge reads clean;
+      // stop entirely during the arrival swoop.
+      if (swarm.attackAnim[i] > 0 || swarm.arrive[i] > 0) speed = 0;
 
-      if (dist > standoff) {
+      if (fleeing) {
+        // Run for the exit with the goods. Kill it to get the juice back.
+        const flee = speed > 0 ? speed * ENEMY.fleeSpeedMult : 0;
+        swarm.px[i] -= (dx / dist) * flee * delta;
+        swarm.pz[i] -= (dz / dist) * flee * delta;
+        if (dist > ENEMY.escapeRadius) {
+          // Escaped: the juice is gone for good. No refunds.
+          swarm.kill(i);
+          continue;
+        }
+      } else if (dist > standoff) {
         swarm.px[i] += (dx / dist) * speed * delta;
         swarm.pz[i] += (dz / dist) * speed * delta;
         if (lateral !== 0) {
@@ -214,6 +235,10 @@ export class EnemySystem extends createSystem({}) {
           swarm.pz[i] += (dx / dist) * lateral * speed * delta;
         }
       }
+
+      // Bank into lateral motion — hover machines lean like they mean it.
+      const targetRoll = Math.max(-0.5, Math.min(0.5, -lateral * 0.55 * (speed > 0 ? 1 : 0)));
+      swarm.roll[i] += (targetRoll - swarm.roll[i]) * Math.min(1, delta * 6);
 
       // --- Crowd separation so hundreds don't collapse into one blob. ---
       swarm.near(swarm.px[i], swarm.pz[i], swarm.radius[i] * 2.2, _near);
@@ -279,7 +304,7 @@ export class EnemySystem extends createSystem({}) {
             this.strikeTower(def.attack, i);
           }
         }
-      } else {
+      } else if (!fleeing && swarm.arrive[i] <= 0) {
         swarm.cooldown[i] -= delta;
         const inRange = def.ranged ? dist <= standoff + 0.4 : dist <= standoff + 0.05;
         if (swarm.cooldown[i] <= 0 && inRange && !run.dead) {
@@ -333,6 +358,14 @@ export class EnemySystem extends createSystem({}) {
     run.score += def.score;
     run.kills += 1;
 
+    // Shot down a thief: every stolen drop goes back in the reservoir.
+    if (swarm.carrying[i] > 0 && tower.health > 0) {
+      tower.health = Math.min(tower.maxHealth, tower.health + swarm.carrying[i]);
+      _pos.set(tower.pos.x, 1.3, tower.pos.z);
+      popDamage(_pos, swarm.carrying[i], false, 0x7dffa8);
+      sfx.refund();
+    }
+
     if (def.splitInto !== undefined && def.splitCount) {
       const hpScale = 1 + (run.wave - 1) * WAVES.hpPerWave;
       for (let n = 0; n < def.splitCount; n++) {
@@ -375,7 +408,7 @@ export class EnemySystem extends createSystem({}) {
     sfx.enemyLob();
   }
 
-  /** A melee toy's snap landing on the tower. */
+  /** A machine's snap landing on the tower. Sippers DRINK and bolt. */
   private strikeTower(amount: number, i: number): void {
     const swarm = this.swarm;
     _pos.set(
@@ -386,6 +419,11 @@ export class EnemySystem extends createSystem({}) {
     dropletBurst(_pos, 6, 0.8);
     sfx.towerHit();
     damageTower(amount);
+    // The Sipper's whole deal: it fills its tank and runs for the exit.
+    if ((swarm.kind[i] as EnemyKindId) === EnemyKind.Drifter) {
+      swarm.carrying[i] = amount;
+      swarm.fleeing[i] = 1;
+    }
   }
 
   // --- Waves. --------------------------------------------------------------
