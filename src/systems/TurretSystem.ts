@@ -2,50 +2,74 @@
  * The build layer: the wrist watch, the shop, and the turrets.
  *
  * THE WATCH: a small plate riding your left wrist with the DROPS counter on
- * a rolling odometer. It is always there, so the economy is always one
- * glance away — no HUD floating in world space.
+ * a rolling odometer (and the OVERDRIVE countdown when it's running). It is
+ * always there, so the economy is always one glance away — no floating HUD.
  *
  * THE SHOP: press Y (the button on your watch wrist) any time mid-battle
- * and the shop board flips up — the same shoot-to-pick cards as everything
- * else. Cards show live prices; a card you can't afford shakes its juice
- * off with a dead buzz. Buying hands you a turret GHOST that glides across
- * the floor on your gaze, exactly like the tower did; trigger plants it.
- * The fight does not pause. Shopping under pressure is the game.
+ * and the shop board flips up — a 3×2 grid of the same shoot-to-pick cards
+ * as everything else. Top row: turrets. Bottom row: consumables — TOP-UP
+ * (instant tower juice), OVERDRIVE (20 s of double ball damage), BIG TANKS
+ * (permanently fatter pistol tanks). A card you can't afford shakes its
+ * juice off with a dead buzz. Buying a turret hands you a ghost that glides
+ * on your gaze; trigger plants it. The fight does not pause.
  *
- * THE TURRETS — your team's kit (white/red), one silhouette each:
- *  - SPRINKLER: tripod + yawing head, auto-lobs juice balls at the nearest
- *    machine in range. Its balls are the SAME balls you fire — one sim.
- *  - CHILLER: a spinning icy ring on a post; everything inside its floor
- *    circle moves at half speed (EnemySystem reads placedTurrets).
- *  - PUMP: a piston station that trickles juice back into the tower.
+ * PERFORMANCE: turrets are built from MODULE-CACHED geometry and materials —
+ * every static part of a turret kind is pre-merged into two meshes (shell +
+ * accent) shared by all instances of that kind, materials are plain
+ * MeshStandard (no clearcoat) and shared globally. Eight turrets cost
+ * ~5 draw calls each with zero per-placement allocation or shader compiles,
+ * where the first build spawned ~12 meshes with fresh clearcoat materials
+ * per turret and sank the frame rate at max field.
+ *
+ * TARGETING: a Sprinkler KEEPS its target until it dies or leaves range
+ * (no flickering between equidistant machines), slews its head onto it at a
+ * finite turn rate, and only fires once roughly aligned — acquire, track,
+ * shoot, like real hardware.
  */
 
 import { createSystem, InputComponent, Vector3 } from '@iwsdk/core';
 import {
+  BufferGeometry,
   CanvasTexture,
+  Euler,
   Group,
   LinearFilter,
+  Matrix4,
   Mesh,
   MeshBasicMaterial,
+  MeshStandardMaterial,
   Object3D,
   PlaneGeometry,
+  Quaternion,
   RingGeometry,
   ConeGeometry,
   CylinderGeometry,
   SphereGeometry,
   TorusGeometry,
 } from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CardBoard } from '../ui/cardBoard.js';
 import { app } from '../game/appState.js';
-import { bank, build, placedTurrets, spendDrops } from '../game/shop.js';
+import { bank, boost, build, placedTurrets, spendDrops } from '../game/shop.js';
 import { tower } from '../game/tower.js';
 import { EnemySystem } from './EnemySystem.js';
 import { squirtBlob } from '../combat/juiceBus.js';
 import { dropletBurst } from '../fx/juice.js';
-import { glossyPlastic, mattePlastic, wetJuice } from '../materials/plastic.js';
 import { pulseHand } from '../input/haptics.js';
 import * as sfx from '../audio/sfx.js';
-import { PALETTE, SHOP, TOWER, TURRET, TURRET_DEFS, TurretKind, type TurretKindId } from '../config.js';
+import {
+  BIGTANK_MAX,
+  OVERDRIVE_SECONDS,
+  PALETTE,
+  SHOP,
+  SHOP_ITEMS,
+  TOPUP_AMOUNT,
+  TOWER,
+  TURRET,
+  TURRET_DEFS,
+  TurretKind,
+  type TurretKindId,
+} from '../config.js';
 
 const HANDS = ['left', 'right'] as const;
 
@@ -56,12 +80,105 @@ const _muzzle = new Vector3();
 const _vel = new Vector3();
 const _near: number[] = [];
 
+// ---------------------------------------------------------------------------
+// Shared turret assets — built once, used by every placement and ghost.
+// ---------------------------------------------------------------------------
+
+function bake(geo: BufferGeometry, x: number, y: number, z: number, sx = 1, sy = 1, sz = 1, rx = 0, ry = 0, rz = 0): BufferGeometry {
+  return geo.applyMatrix4(
+    new Matrix4().compose(
+      new Vector3(x, y, z),
+      new Quaternion().setFromEuler(new Euler(rx, ry, rz)),
+      new Vector3(sx, sy, sz),
+    ),
+  );
+}
+
+interface TurretAssets {
+  /** Static shell parts, pre-merged (competition white). */
+  shell: BufferGeometry;
+  /** Static accent parts, pre-merged (racing red / ice). */
+  accent: BufferGeometry;
+  /** Head parts for the animated bit, pre-merged per material. */
+  headShell?: BufferGeometry;
+  headAccent?: BufferGeometry;
+  headY: number;
+}
+
+let assets: Record<TurretKindId, TurretAssets> | undefined;
+let matWhite: MeshStandardMaterial;
+let matRed: MeshStandardMaterial;
+let matIce: MeshStandardMaterial;
+let matGhost: MeshBasicMaterial;
+let auraGeo: RingGeometry;
+
+function tripodBase(): BufferGeometry[] {
+  const parts: BufferGeometry[] = [];
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2;
+    parts.push(
+      bake(new CylinderGeometry(0.02, 0.028, 0.4, 8), Math.cos(a) * 0.14, 0.2, Math.sin(a) * 0.14, 1, 1, 1, -Math.sin(a) * 0.35, 0, Math.cos(a) * 0.35),
+    );
+  }
+  return parts;
+}
+
+function buildAssets(): Record<TurretKindId, TurretAssets> {
+  matWhite = new MeshStandardMaterial({ color: PALETTE.sportWhite, roughness: 0.25, metalness: 0 });
+  matRed = new MeshStandardMaterial({ color: PALETTE.sportRed, roughness: 0.3, metalness: 0 });
+  matIce = new MeshStandardMaterial({ color: 0x9fe8f8, roughness: 0.15, metalness: 0 });
+  matGhost = new MeshBasicMaterial({ color: PALETTE.water, transparent: true, opacity: 0.4, depthWrite: false });
+  auraGeo = new RingGeometry(TURRET.chiller.radius - 0.05, TURRET.chiller.radius, 48);
+  auraGeo.rotateX(-Math.PI / 2);
+
+  return {
+    [TurretKind.Sprinkler]: {
+      shell: mergeGeometries(tripodBase())!,
+      accent: bake(new CylinderGeometry(0.09, 0.11, 0.1, 14), 0, 0.42, 0),
+      // The yawing head: dome + barrel in white, collar + tank cap in red.
+      headShell: mergeGeometries([
+        bake(new SphereGeometry(0.11, 16, 12), 0, 0, 0),
+        bake(new CylinderGeometry(0.028, 0.034, 0.24, 10), 0, 0.02, -0.16, 1, 1, 1, Math.PI / 2, 0, 0),
+      ])!,
+      headAccent: mergeGeometries([
+        bake(new TorusGeometry(0.035, 0.012, 8, 16), 0, 0.02, -0.28),
+        bake(new SphereGeometry(0.07, 12, 10), 0, 0.12, 0.03),
+      ])!,
+      headY: 0.5,
+    },
+    [TurretKind.Chiller]: {
+      shell: mergeGeometries([...tripodBase(), bake(new CylinderGeometry(0.03, 0.03, 0.3, 10), 0, 0.6, 0)])!,
+      accent: bake(new CylinderGeometry(0.09, 0.11, 0.1, 14), 0, 0.42, 0),
+      // The spinning halo with its fins, all ice.
+      headAccent: mergeGeometries([
+        bake(new TorusGeometry(0.16, 0.025, 10, 26), 0, 0, 0, 1, 1, 1, Math.PI / 2, 0, 0),
+        ...[0, 1, 2, 3].map((i) => {
+          const a = (i / 4) * Math.PI * 2;
+          return bake(new ConeGeometry(0.03, 0.1, 6), Math.cos(a) * 0.16, 0, Math.sin(a) * 0.16);
+        }),
+      ])!,
+      headY: 0.78,
+    },
+    [TurretKind.Pump]: {
+      shell: mergeGeometries([...tripodBase(), bake(new CylinderGeometry(0.12, 0.14, 0.26, 14), 0, 0.56, 0)])!,
+      accent: mergeGeometries([
+        bake(new CylinderGeometry(0.09, 0.11, 0.1, 14), 0, 0.42, 0),
+        bake(new TorusGeometry(0.07, 0.016, 8, 18), 0.14, 0.56, 0, 1, 1, 1, 0, Math.PI / 2, 0),
+      ])!,
+      // The bobbing piston.
+      headShell: bake(new CylinderGeometry(0.045, 0.045, 0.2, 10), 0, 0, 0),
+      headY: 0.62,
+    },
+  };
+}
+
 interface TurretRig {
   kind: TurretKindId;
   group: Group;
-  /** Sprinkler: the yawing head; Chiller/Pump: the animated bit. */
   head?: Object3D;
   data: (typeof placedTurrets)[number];
+  /** Sprinkler: the swarm slot it is locked onto (-1 = none). */
+  target: number;
 }
 
 export class TurretSystem extends createSystem({}) {
@@ -71,6 +188,7 @@ export class TurretSystem extends createSystem({}) {
   private watchTex!: CanvasTexture;
   private watchAttached = false;
   private lastWatchValue = -1;
+  private lastOverdriveShown = -1;
   private toggleWas = false;
   private lastPlacingShown: string | null = null;
   private triggerWas: [boolean, boolean] = [false, false];
@@ -82,12 +200,16 @@ export class TurretSystem extends createSystem({}) {
   init(): void {
     this.board = new CardBoard(this.world.scene);
     this.buildWatch();
+    if (!assets) assets = buildAssets();
   }
 
   update(delta: number): void {
     this.time += delta;
     this.world.camera.getWorldPosition(_cam);
     this.board.update(delta, _cam);
+
+    // OVERDRIVE burns down here — one owner for the clock.
+    if (boost.overdrive > 0) boost.overdrive = Math.max(0, boost.overdrive - delta);
     this.updateWatch(delta);
 
     // Run resets (new game) clear the field.
@@ -106,7 +228,6 @@ export class TurretSystem extends createSystem({}) {
       (gp?.getButtonPressed(InputComponent.X_Button) ?? false);
     if (toggle && !this.toggleWas) {
       if (build.placing) {
-        // Cancel a pending placement instead.
         build.placing = null;
         this.hideGhost();
         sfx.shopToggle(false);
@@ -133,7 +254,7 @@ export class TurretSystem extends createSystem({}) {
           if (rig.head) rig.head.rotation.y += delta * 2.4;
           break;
         case TurretKind.Pump: {
-          if (rig.head) rig.head.position.y = 0.62 + Math.abs(Math.sin(this.time * 3)) * 0.08;
+          if (rig.head) rig.head.position.y = assets![TurretKind.Pump].headY + Math.abs(Math.sin(this.time * 3)) * 0.08;
           if (tower.placed && tower.health > 0) {
             tower.health = Math.min(tower.maxHealth, tower.health + TURRET.pump.healPerSec * delta);
           }
@@ -143,39 +264,81 @@ export class TurretSystem extends createSystem({}) {
     }
   }
 
-  // --- The shop. -----------------------------------------------------------
+  // --- The shop: turrets on top, consumables below. ------------------------
 
   private showShop(): void {
-    this.board.show(
-      TURRET_DEFS.map((def) => ({
-        id: def.id,
-        title: def.name,
-        blurb: def.blurb,
-        effectLine: `${def.cost} DROPS`,
-        footnote:
-          placedTurrets.length >= SHOP.maxTurrets
-            ? 'FIELD FULL'
-            : bank.drops < def.cost
-              ? `need ${def.cost - bank.drops} more`
+    const turretCards = TURRET_DEFS.map((def) => ({
+      id: def.id as string,
+      title: def.name,
+      blurb: def.blurb,
+      effectLine: `${def.cost} DROPS`,
+      footnote:
+        placedTurrets.length >= SHOP.maxTurrets
+          ? 'FIELD FULL'
+          : bank.drops < def.cost
+            ? `need ${def.cost - bank.drops} more`
+            : undefined,
+      color: def.color,
+      scale: 0.85,
+    }));
+    const itemCards = SHOP_ITEMS.map((item) => ({
+      id: item.id as string,
+      title: item.name,
+      blurb: item.blurb,
+      effectLine: `${item.cost} DROPS`,
+      footnote:
+        item.id === 'bigtank' && boost.tankStacks > 0
+          ? `owned ×${boost.tankStacks}`
+          : item.id === 'overdrive' && boost.overdrive > 0
+            ? `${Math.ceil(boost.overdrive)}s running`
+            : bank.drops < item.cost
+              ? `need ${item.cost - bank.drops} more`
               : undefined,
-        color: def.color,
-      })),
-      {
-        y: SHOP.boardHeight,
-        distance: SHOP.boardDistance,
-        canPick: (id) => {
-          const def = TURRET_DEFS.find((d) => d.id === id)!;
-          return bank.drops >= def.cost && placedTurrets.length < SHOP.maxTurrets;
-        },
-        onPick: (id) => {
-          const def = TURRET_DEFS.find((d) => d.id === id)!;
-          if (!spendDrops(def.cost)) return;
-          sfx.buy();
-          build.placing = def.id;
-          pulseHand(this.world.session, HANDS[SHOP.toggleHand], 0.4, 60);
-        },
+      color: item.color,
+      scale: 0.85,
+    }));
+
+    this.board.show([...turretCards, ...itemCards], {
+      y: SHOP.boardHeight,
+      distance: SHOP.boardDistance,
+      perRow: 3,
+      canPick: (id) => {
+        const turret = TURRET_DEFS.find((d) => d.id === id);
+        if (turret) return bank.drops >= turret.cost && placedTurrets.length < SHOP.maxTurrets;
+        const item = SHOP_ITEMS.find((d) => d.id === id)!;
+        if (item.id === 'bigtank' && boost.tankStacks >= BIGTANK_MAX) return false;
+        return bank.drops >= item.cost;
       },
-    );
+      onPick: (id) => this.purchase(id),
+    });
+  }
+
+  /** Buy by id — shop cards land here; public for the dev hooks. */
+  purchase(id: string): void {
+    const turret = TURRET_DEFS.find((d) => d.id === id);
+    if (turret) {
+      if (!spendDrops(turret.cost)) return;
+      sfx.buy();
+      build.placing = turret.id;
+      pulseHand(this.world.session, HANDS[SHOP.toggleHand], 0.4, 60);
+      return;
+    }
+    const item = SHOP_ITEMS.find((d) => d.id === id)!;
+    if (!spendDrops(item.cost)) return;
+    sfx.buy();
+    switch (item.id) {
+      case 'topup':
+        tower.health = Math.min(tower.maxHealth, tower.health + TOPUP_AMOUNT);
+        tower.hitFlash = 0;
+        sfx.refund();
+        break;
+      case 'overdrive':
+        boost.overdrive += OVERDRIVE_SECONDS;
+        break;
+      case 'bigtank':
+        boost.tankStacks += 1;
+        break;
+    }
   }
 
   // --- Placement (the same gaze-ghost ritual as the tower). ----------------
@@ -225,7 +388,7 @@ export class TurretSystem extends createSystem({}) {
     const group = this.buildTurretMesh(kind, false);
     group.position.copy(at);
     this.world.scene.add(group);
-    this.rigs.push({ kind, group, head: group.userData.head as Object3D | undefined, data });
+    this.rigs.push({ kind, group, head: group.userData.head as Object3D | undefined, data, target: -1 });
     build.placing = null;
     this.hideGhost();
     sfx.placeTower();
@@ -233,14 +396,10 @@ export class TurretSystem extends createSystem({}) {
   }
 
   private hideGhost(): void {
-    if (this.ghost) {
-      this.ghost.removeFromParent();
-      this.ghost = undefined;
-    }
-    if (this.ghostRing) {
-      this.ghostRing.removeFromParent();
-      this.ghostRing = undefined;
-    }
+    this.ghost?.removeFromParent();
+    this.ghost = undefined;
+    this.ghostRing?.removeFromParent();
+    this.ghostRing = undefined;
   }
 
   /** Wipe every standing turret (new run). */
@@ -257,125 +416,87 @@ export class TurretSystem extends createSystem({}) {
     placedTurrets.length = 0;
   }
 
-  // --- Turret bodies (your team's kit: white shells, red trim). ------------
+  // --- Turret bodies, assembled from the shared cached assets. -------------
 
   private buildTurretMesh(kind: TurretKindId, ghost: boolean): Group {
+    const a = assets![kind];
     const g = new Group();
-    const white = ghost
-      ? new MeshBasicMaterial({ color: PALETTE.water, transparent: true, opacity: 0.4, depthWrite: false })
-      : glossyPlastic(PALETTE.sportWhite, 0.2);
-    const red = ghost ? white : glossyPlastic(PALETTE.sportRed, 0.25);
-    const smoke = ghost ? white : mattePlastic(PALETTE.sportSmoke);
+    g.add(new Mesh(a.shell, ghost ? matGhost : matWhite));
+    g.add(new Mesh(a.accent, ghost ? matGhost : kind === TurretKind.Chiller ? matIce : matRed));
 
-    // Shared tripod base.
-    for (let i = 0; i < 3; i++) {
-      const a = (i / 3) * Math.PI * 2;
-      const leg = new Mesh(new CylinderGeometry(0.02, 0.028, 0.4, 8), white);
-      leg.position.set(Math.cos(a) * 0.14, 0.2, Math.sin(a) * 0.14);
-      leg.rotation.z = Math.cos(a) * 0.35;
-      leg.rotation.x = -Math.sin(a) * 0.35;
-      g.add(leg);
+    const head = new Group();
+    head.position.y = a.headY;
+    if (a.headShell) head.add(new Mesh(a.headShell, ghost ? matGhost : matWhite));
+    if (a.headAccent) {
+      head.add(
+        new Mesh(a.headAccent, ghost ? matGhost : kind === TurretKind.Sprinkler ? matRed : matIce),
+      );
     }
-    const hub = new Mesh(new CylinderGeometry(0.09, 0.11, 0.1, 14), red);
-    hub.position.y = 0.42;
-    g.add(hub);
+    g.add(head);
+    g.userData.head = head;
 
-    if (kind === TurretKind.Sprinkler) {
-      const head = new Group();
-      head.position.y = 0.5;
-      const dome = new Mesh(new SphereGeometry(0.11, 16, 12), white);
-      head.add(dome);
-      const barrel = new Mesh(new CylinderGeometry(0.028, 0.034, 0.24, 10), white);
-      barrel.rotation.x = Math.PI / 2;
-      barrel.position.set(0, 0.02, -0.16);
-      head.add(barrel);
-      const collar = new Mesh(new TorusGeometry(0.035, 0.012, 8, 16), red);
-      collar.position.set(0, 0.02, -0.28);
-      head.add(collar);
-      const tank = new Mesh(new SphereGeometry(0.07, 12, 10), ghost ? white : wetJuice(PALETTE.juice));
-      tank.position.set(0, 0.12, 0.03);
-      head.add(tank);
-      g.add(head);
-      g.userData.head = head;
-    } else if (kind === TurretKind.Chiller) {
-      const post = new Mesh(new CylinderGeometry(0.03, 0.03, 0.3, 10), white);
-      post.position.y = 0.6;
-      g.add(post);
-      const ring = new Group();
-      ring.position.y = 0.78;
-      const halo = new Mesh(new TorusGeometry(0.16, 0.025, 10, 26), ghost ? white : glossyPlastic(0x9fe8f8, 0.1));
-      halo.rotation.x = Math.PI / 2;
-      ring.add(halo);
-      for (let i = 0; i < 4; i++) {
-        const a = (i / 4) * Math.PI * 2;
-        const fin = new Mesh(new ConeGeometry(0.03, 0.1, 6), ghost ? white : glossyPlastic(0x9fe8f8, 0.1));
-        fin.position.set(Math.cos(a) * 0.16, 0, Math.sin(a) * 0.16);
-        ring.add(fin);
-      }
-      g.add(ring);
-      g.userData.head = ring;
-      if (!ghost) {
-        // The slow field painted on the floor so its reach is legible.
-        const aura = new Mesh(
-          new RingGeometry(TURRET.chiller.radius - 0.05, TURRET.chiller.radius, 48),
-          new MeshBasicMaterial({ color: 0x9fe8f8, transparent: true, opacity: 0.35 }),
-        );
-        aura.rotation.x = -Math.PI / 2;
-        aura.position.y = 0.015;
-        g.add(aura);
-      }
-    } else {
-      // Pump: a barrel with a bobbing piston and a red hand-wheel.
-      const barrel = new Mesh(new CylinderGeometry(0.12, 0.14, 0.26, 14), white);
-      barrel.position.y = 0.56;
-      g.add(barrel);
-      const piston = new Mesh(new CylinderGeometry(0.045, 0.045, 0.2, 10), smoke);
-      piston.position.y = 0.62;
-      g.add(piston);
-      g.userData.head = piston;
-      const wheel = new Mesh(new TorusGeometry(0.07, 0.016, 8, 18), red);
-      wheel.position.set(0.14, 0.56, 0);
-      wheel.rotation.y = Math.PI / 2;
-      g.add(wheel);
+    if (kind === TurretKind.Chiller && !ghost) {
+      // The slow field painted on the floor so its reach is legible.
+      const aura = new Mesh(auraGeo, new MeshBasicMaterial({ color: 0x9fe8f8, transparent: true, opacity: 0.35 }));
+      aura.position.y = 0.015;
+      g.add(aura);
     }
     return g;
   }
 
-  // --- The Sprinkler's brain. ----------------------------------------------
+  // --- The Sprinkler's brain: acquire, slew, fire when aligned. ------------
 
   private updateSprinkler(rig: TurretRig, delta: number, enemies: EnemySystem | undefined): void {
     rig.data.cooldown -= delta;
     const swarm = enemies?.swarm;
     if (!swarm || !rig.head) return;
 
-    // Nearest live machine in range, via the spatial grid.
-    swarm.near(rig.group.position.x, rig.group.position.z, TURRET.sprinkler.range, _near);
-    let best = -1;
-    let bestD2 = TURRET.sprinkler.range * TURRET.sprinkler.range;
-    for (let n = 0; n < _near.length; n++) {
-      const j = _near[n];
-      if (!swarm.alive[j] || swarm.arrive[j] > 0) continue;
-      const dx = swarm.px[j] - rig.group.position.x;
-      const dz = swarm.pz[j] - rig.group.position.z;
-      const d2 = dx * dx + dz * dz;
-      if (d2 < bestD2) {
-        bestD2 = d2;
-        best = j;
+    const px = rig.group.position.x;
+    const pz = rig.group.position.z;
+    const range2 = TURRET.sprinkler.range * TURRET.sprinkler.range;
+
+    // Keep the locked target while it lives and stays in range — no
+    // flicking between equidistant machines mid-burst.
+    if (rig.target >= 0) {
+      const j = rig.target;
+      const dx = swarm.px[j] - px;
+      const dz = swarm.pz[j] - pz;
+      if (!swarm.alive[j] || dx * dx + dz * dz > range2 * 1.15) rig.target = -1;
+    }
+    if (rig.target < 0) {
+      swarm.near(px, pz, TURRET.sprinkler.range, _near);
+      let bestD2 = range2;
+      for (let n = 0; n < _near.length; n++) {
+        const j = _near[n];
+        if (!swarm.alive[j] || swarm.arrive[j] > 0) continue;
+        const dx = swarm.px[j] - px;
+        const dz = swarm.pz[j] - pz;
+        const d2 = dx * dx + dz * dz;
+        if (d2 < bestD2) {
+          bestD2 = d2;
+          rig.target = j;
+        }
       }
     }
-    if (best < 0) return;
+    if (rig.target < 0) return;
 
-    // Yaw the head onto the target (the -Z barrel convention).
-    const dx = swarm.px[best] - rig.group.position.x;
-    const dz = swarm.pz[best] - rig.group.position.z;
-    rig.head.rotation.y = Math.atan2(-dx, -dz);
+    // Slew the head onto the target at a finite turn rate; hold fire until
+    // the barrel is actually pointing at it.
+    const dx = swarm.px[rig.target] - px;
+    const dz = swarm.pz[rig.target] - pz;
+    const desired = Math.atan2(-dx, -dz);
+    let dyaw = desired - rig.head.rotation.y;
+    while (dyaw > Math.PI) dyaw -= Math.PI * 2;
+    while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+    rig.head.rotation.y += dyaw * Math.min(1, delta * 7);
+    const aligned = Math.abs(dyaw) < 0.22;
 
-    if (rig.data.cooldown > 0) return;
+    if (!aligned || rig.data.cooldown > 0) return;
     rig.data.cooldown = 1 / TURRET.sprinkler.rate;
 
     // Lob a ball with the same arc maths the machines use against you.
     rig.head.getWorldPosition(_muzzle);
-    _vel.set(swarm.px[best], swarm.py[best], swarm.pz[best]).sub(_muzzle);
+    _vel.set(swarm.px[rig.target], swarm.py[rig.target], swarm.pz[rig.target]).sub(_muzzle);
     const dist = _vel.length();
     _vel.normalize().multiplyScalar(TURRET.sprinkler.muzzleSpeed);
     _vel.y += (2.0 * dist) / (2 * TURRET.sprinkler.muzzleSpeed);
@@ -400,25 +521,24 @@ export class TurretSystem extends createSystem({}) {
   }
 
   private updateWatch(delta: number): void {
-    // Lazy-attach to the left wrist once the grip space exists.
     if (!this.watchAttached) {
       const grip = this.world.playerSpaceEntities.gripSpaces[HANDS[SHOP.toggleHand]]?.object3D;
       if (grip) {
         grip.add(this.watch);
-        // Inner-wrist placement: behind the grip, tilted up at the face.
         this.watch.position.set(0, 0.02, 0.1);
         this.watch.rotation.set(-0.9, 0, 0);
         this.watchAttached = true;
       }
     }
 
-    // The rolling odometer: shown chases drops.
     bank.shown += (bank.drops - bank.shown) * Math.min(1, delta * 6);
     if (Math.abs(bank.drops - bank.shown) < 0.6) bank.shown = bank.drops;
     const display = Math.round(bank.shown);
-    if (display !== this.lastWatchValue || build.placing !== this.lastPlacingShown) {
+    const od = Math.ceil(boost.overdrive);
+    if (display !== this.lastWatchValue || build.placing !== this.lastPlacingShown || od !== this.lastOverdriveShown) {
       this.lastWatchValue = display;
       this.lastPlacingShown = build.placing;
+      this.lastOverdriveShown = od;
       this.drawWatch(display);
     }
   }
@@ -429,13 +549,12 @@ export class TurretSystem extends createSystem({}) {
     const H = this.watchCanvas.height;
     ctx.clearRect(0, 0, W, H);
     ctx.textBaseline = 'middle';
-    // The watch face: smoked glass with a gold droplet readout.
     ctx.fillStyle = 'rgba(20,26,34,0.85)';
     ctx.beginPath();
     ctx.roundRect(4, 4, W - 8, H - 8, 34);
     ctx.fill();
     ctx.lineWidth = 6;
-    ctx.strokeStyle = '#e0312e';
+    ctx.strokeStyle = boost.overdrive > 0 ? '#ffb000' : '#e0312e';
     ctx.stroke();
     ctx.fillStyle = '#ffd23f';
     ctx.font = '900 74px system-ui, -apple-system, sans-serif';
@@ -445,7 +564,15 @@ export class TurretSystem extends createSystem({}) {
     ctx.textAlign = 'left';
     ctx.fillStyle = '#9fb0ba';
     ctx.fillText('DROPS', 30, H / 2 - 18);
-    ctx.fillText(build.placing ? 'Y: CANCEL' : 'Y: SHOP', 30, H - 40);
+    ctx.fillText(
+      boost.overdrive > 0
+        ? `OD ${Math.ceil(boost.overdrive)}s`
+        : build.placing
+          ? 'Y: CANCEL'
+          : 'Y: SHOP',
+      30,
+      H - 40,
+    );
     this.watchTex.needsUpdate = true;
   }
 }

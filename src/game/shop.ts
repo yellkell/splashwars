@@ -29,7 +29,17 @@ export function spendDrops(n: number): boolean {
 export function resetBank(): void {
   bank.drops = 0;
   bank.shown = 0;
+  boost.overdrive = 0;
+  boost.tankStacks = 0;
 }
+
+/** Paid power: OVERDRIVE seconds remaining, and BIG TANKS stacks. */
+export const boost = {
+  /** Seconds of double ball damage remaining. */
+  overdrive: 0,
+  /** Each stack adds 4 balls to every fresh tank. */
+  tankStacks: 0,
+};
 
 /** A turret standing in the room. */
 export interface PlacedTurret {

@@ -112,6 +112,7 @@ export const HOLSTER = {
   throwGravity: 5.5, // guns are heavier than juice balls
   throwSpin: 9, // rad/s tumble in flight — the tank sloshes wildly
   hitRadius: 0.14, // the gun's collision radius vs enemies
+  catchRadius: 0.55, // squeeze this close to a thrown gun to CATCH it
   // Damage a direct hit deals, scaled by how full the thrown tank was — a
   // brimming pistol to the face is a serious opener.
   throwDamage: 220,
@@ -331,6 +332,35 @@ export interface TurretDef {
   cost: number;
   color: string;
 }
+
+/** Non-turret purchases on the same shop board. */
+export const SHOP_ITEMS = [
+  {
+    id: 'topup',
+    name: 'TOP-UP',
+    blurb: 'Pour 80 juice straight back into the tower',
+    cost: 100,
+    color: '#f0299b',
+  },
+  {
+    id: 'overdrive',
+    name: 'OVERDRIVE',
+    blurb: 'Double ball damage for 20 seconds',
+    cost: 200,
+    color: '#ffb000',
+  },
+  {
+    id: 'bigtank',
+    name: 'BIG TANKS',
+    blurb: 'Every fresh pistol carries 4 more balls',
+    cost: 150,
+    color: '#1fc4c9',
+  },
+] as const;
+export const OVERDRIVE_SECONDS = 20;
+export const TOPUP_AMOUNT = 80;
+export const BIGTANK_BONUS = 4; // balls per stack
+export const BIGTANK_MAX = 4;
 
 export const TURRET_DEFS: TurretDef[] = [
   {

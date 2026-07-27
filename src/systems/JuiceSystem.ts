@@ -38,6 +38,7 @@ import {
 import { initDamageNumbers, popDamage, updateDamageNumbers } from '../fx/damageNumbers.js';
 import { ballDamage, damagePlayer, run, UpgradeId } from '../game/run.js';
 import { damageTower, tower } from '../game/tower.js';
+import { boost } from '../game/shop.js';
 import * as sfx from '../audio/sfx.js';
 import { AOE, ARENA_BOUNDS, ENEMY_SHOT, PISTOL, TOWER } from '../config.js';
 import { Quaternion } from 'three';
@@ -85,7 +86,7 @@ export class JuiceSystem extends createSystem({}) {
     for (const s of pendingEnemyShots.splice(0)) this.claim(s.pos, s.vel, 1), recycleSpawn(s);
 
     const burstStacks = run.stacks[UpgradeId.Burst];
-    const damage = ballDamage();
+    const damage = ballDamage() * (boost.overdrive > 0 ? 2 : 1);
 
     for (let i = 0; i < MAX_BLOBS; i++) {
       if (!this.alive[i]) continue;

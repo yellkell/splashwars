@@ -87,22 +87,33 @@ export class CardBoard {
       /** Gate a pick (e.g. affordability). Denied cards shake off their
        * juice and stay on the board instead of resolving. */
       canPick?: (id: string) => boolean;
+      /** Grid layout: cards per row (default: everything on one row). */
+      perRow?: number;
     },
   ): void {
     this.clear();
     this.onPick = opts.onPick;
     this.canPick = opts.canPick;
 
-    // Lay the row out around centre, respecting per-card scale.
-    const widths = specs.map((s) => UPGRADES.cardWidth * (s.scale ?? 1));
-    const total = widths.reduce((a, b) => a + b, 0) + UPGRADES.cardGap * (specs.length - 1);
-    let x = -total / 2;
-    for (let i = 0; i < specs.length; i++) {
-      const card = this.buildCard(specs[i]);
-      card.group.position.set(x + widths[i] / 2, 0, 0);
-      x += widths[i] + UPGRADES.cardGap;
-      this.board.add(card.group);
-      this.cards.push(card);
+    // Lay out as a centred grid, respecting per-card scale.
+    const perRow = opts.perRow ?? specs.length;
+    const rows: CardSpec[][] = [];
+    for (let i = 0; i < specs.length; i += perRow) rows.push(specs.slice(i, i + perRow));
+    const rowH = UPGRADES.cardHeight * (specs[0]?.scale ?? 1) + 0.1;
+    const yTop = ((rows.length - 1) / 2) * rowH;
+    for (let r = 0; r < rows.length; r++) {
+      const rowSpecs = rows[r];
+      const widths = rowSpecs.map((s) => UPGRADES.cardWidth * (s.scale ?? 1));
+      const total = widths.reduce((a, b) => a + b, 0) + UPGRADES.cardGap * (rowSpecs.length - 1);
+      let x = -total / 2;
+      for (let i = 0; i < rowSpecs.length; i++) {
+        const card = this.buildCard(rowSpecs[i]);
+        card.group.position.set(x + widths[i] / 2, yTop - r * rowH, 0);
+        card.group.userData.baseY = yTop - r * rowH;
+        x += widths[i] + UPGRADES.cardGap;
+        this.board.add(card.group);
+        this.cards.push(card);
+      }
     }
 
     this.board.position.set(0, opts.y ?? UPGRADES.cardHeightY, -(opts.distance ?? UPGRADES.cardDistance));
@@ -124,7 +135,8 @@ export class CardBoard {
     _cam.copy(camWorldPos);
     this.board.lookAt(_cam.x, this.board.position.y, _cam.z);
     for (let i = 0; i < this.cards.length; i++) {
-      this.cards[i].group.position.y = Math.sin(this.time * 1.7 + i * 1.3) * 0.012;
+      const base = (this.cards[i].group.userData.baseY as number) ?? 0;
+      this.cards[i].group.position.y = base + Math.sin(this.time * 1.7 + i * 1.3) * 0.012;
     }
   }
 

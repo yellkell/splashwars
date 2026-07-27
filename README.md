@@ -51,7 +51,9 @@ no models, no textures, no sounds shipped.
   primitives. They ride your **hips**: squeeze the grip near a holster to
   draw, release it to **throw the whole gun** — it tumbles, bursts on
   whatever it hits, and a fresh, full one respawns on your hip. With no
-  auto-refill, that throw is your reload.
+  auto-refill, that throw is your reload. And you can **CATCH**: squeeze
+  the grip while a thrown gun is in reach and it snaps back into your
+  palm, ammo intact — toss it, snatch it back, juggle it.
 - **The sloshing tank** — world-space clipped-liquid shader (the Alyx
   trick): spring-damper slosh driven by real hand acceleration, ripple
   energy, meniscus foam, and a **frosted** blow-moulded shell over fully
@@ -105,13 +107,19 @@ no models, no textures, no sounds shipped.
   a wave-clear bonus that grows with the wave). A smoked-glass WATCH on
   your left wrist shows the balance on a rolling odometer. Press Y — the
   button on your watch wrist — any time mid-battle and the shop board
-  flips up: SPRINKLER (150, an auto-firing tripod that lobs the same juice
-  balls you do), CHILLER (250, an icy field that halves the speed of
-  everything inside its floor ring), PUMP (350, trickles juice back into
-  the tower). Cards you can't afford shake their juice off with a dead
-  buzz. Buying hands you a ghost that glides on your gaze — trigger plants
-  it, exactly like the tower. The fight does not pause: shopping under
-  pressure is the game.
+  flips up as a 3×2 grid. Top row, turrets: SPRINKLER (150 — an
+  auto-firing tripod that locks a target, slews its head onto it at a
+  finite turn rate and only fires once aligned), CHILLER (250 — an icy
+  field that halves the speed of everything inside its floor ring), PUMP
+  (350 — trickles juice back into the tower). Bottom row, consumables:
+  TOP-UP (100 — 80 juice straight into the reservoir), OVERDRIVE (200 —
+  20 s of double ball damage, countdown on the watch), BIG TANKS (150,
+  stacking — every fresh pistol carries 4 more balls). Cards you can't
+  afford shake their juice off with a dead buzz. Buying a turret hands you
+  a ghost that glides on your gaze — trigger plants it, exactly like the
+  tower. The fight does not pause: shopping under pressure is the game.
+  Turrets render from module-cached merged geometry and shared
+  MeshStandard materials, so a maxed field stays a handful of draw calls.
 - **Menus you shoot** — the game has exactly one interaction verb. The
   title screen is a HOW TO PLAY plate over a big START card: draw and shoot
   it to begin. Losing brings a WIPED OUT / TOWER DRAINED plate (wave / pops

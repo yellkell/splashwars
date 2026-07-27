@@ -32,7 +32,7 @@ import { dropletBurst, stampSplat } from '../fx/juice.js';
 import { pulseHand } from '../input/haptics.js';
 import { run, UpgradeId } from '../game/run.js';
 import { app } from '../game/appState.js';
-import { build } from '../game/shop.js';
+import { boost, build } from '../game/shop.js';
 import * as sfx from '../audio/sfx.js';
 import { AOE, AUTO, HOLSTER, PISTOL } from '../config.js';
 
@@ -170,6 +170,22 @@ export class WeaponSystem extends createSystem({
           t.vel.y -= HOLSTER.throwGravity * delta;
           rig.group.position.addScaledVector(t.vel, delta);
           rig.group.rotateOnAxis(t.spinAxis, t.spin * delta);
+
+          // THE CATCH: squeeze the grip with the gun's own hand while it's
+          // in reach and it snaps back into your palm, ammo intact — throw
+          // it out, snatch it back, juggle it. Pure style, zero cost.
+          if (squeezeDown && grip) {
+            grip.getWorldPosition(_gripPos);
+            if (_gripPos.distanceTo(rig.group.position) <= HOLSTER.catchRadius) {
+              grip.add(rig.group);
+              rig.group.position.set(0, 0, 0);
+              rig.group.quaternion.setFromAxisAngle(_e.set(1, 0, 0), HOLSTER.heldPitch);
+              e.setValue(WaterPistol, 'state', PistolState.Held);
+              sfx.draw();
+              pulseHand(this.world.session, HANDS[hand], 0.7, 70);
+              break;
+            }
+          }
           this.checkThrowImpact(e, rig);
           break;
         }
@@ -225,7 +241,9 @@ export class WeaponSystem extends createSystem({
     if (app.phase === 'placing' || build.placing) return;
 
     let ammo = e.getValue(WaterPistol, 'ammo') ?? 1;
-    const drain = 1 / PISTOL.shotsPerTank;
+    // BIG TANKS stacks stretch every tank without touching the visuals —
+    // the same full reservoir just holds more shots.
+    const drain = 1 / (PISTOL.shotsPerTank + boost.tankStacks * 4);
     const autoStacks = run.stacks[UpgradeId.AutoFire];
 
     // --- SEMI-AUTO: exactly one ball per trigger press, instantly. ---
