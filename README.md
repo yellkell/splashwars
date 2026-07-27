@@ -1,7 +1,7 @@
 # SPLASH WARS 🔫💦
 
 Tower-defense JUICE fighting in WebXR passthrough. A ghost JUICE TOWER
-follows your gaze across your real floor — pull the trigger and it PLANTS,
+follows your hand's point across your real floor — pull the trigger and it PLANTS,
 and every wave of THE THIRST comes for it — the rival team's DRINKING
 MACHINES: sleek hover-drones in the same competition-plastic kit as your
 pistols, white shells with violet team trim, each built around one big
@@ -96,8 +96,9 @@ no models, no textures, no sounds shipped.
   thickens as you weaken and washes off as you recover. Same philosophy as
   the ammo: read the juice, not a number.
 - **Place the tower to start** — shooting START hands you a pulsing cyan
-  ghost of the juice tower that glides across the real floor wherever you
-  look; either trigger plants it (a plastic KACHUNK) and wave one rolls in.
+  ghost of the juice tower that glides across the real floor wherever your
+  HAND points (the ray leaves the grip along the pistol's own barrel axis);
+  either trigger plants it (a plastic KACHUNK) and wave one rolls in.
   The reservoir shows its LIVE juice level through frosted plastic (the
   same clipped-liquid shader as the pistol tanks), and strikes jolt the
   surface. AGAIN after a wipe keeps your spot; MENU lifts the tower for a
@@ -118,8 +119,8 @@ no models, no textures, no sounds shipped.
   purchase). Every level bought multiplies that sink's price by 1.5, so
   late-game DROPS always have somewhere to go. Cards you can't
   afford shake their juice off with a dead buzz. Buying a turret hands you
-  a ghost that glides on your gaze — trigger plants it, exactly like the
-  tower. The fight does not pause: shopping under pressure is the game.
+  a ghost that rides your hand's point — trigger plants it, exactly like
+  the tower. The fight does not pause: shopping under pressure is the game.
   Turrets render from module-cached merged geometry and shared
   MeshStandard materials, so a maxed field stays a handful of draw calls.
 - **Menus you shoot** — the game has exactly one interaction verb. The
@@ -131,8 +132,18 @@ no models, no textures, no sounds shipped.
   they touch), Buoyancy (max health + full heal), Juice Bomb (thrown
   pistols detonate), Burst (balls burst with AOE) — all stacking. All of
   it is one shared shoot-to-pick CardBoard primitive (ui/cardBoard.ts).
-- **Synth SFX** — squirt loops, splats, glugs, empty clicks, enemy lobs,
-  juice-bomb whumps, wave horns, upgrade chimes.
+- **The floor comes back** — clearing a wave sends an aqua ring sweeping
+  out from the tower that slurps every floor splat it passes (with a long
+  rising slurp to match), so each wave starts on a clean arena and the
+  splat budget never silts up. The SPLASH WARS sign is title-screen-only —
+  nothing floats over the fight — and every canvas-drawn UI (cards, plates,
+  watch, signs) renders at 2× with sRGB colour and anisotropy, so menus
+  read crisp instead of washed and shimmery.
+- **Synth SFX** — every shot is a round wet PLOP (a dip-and-swoop droplet
+  sine over a low pump thump, pitch wandering shot to shot so full-auto
+  BURBLES over a lowpassed gurgle bed instead of hissing), plus splats,
+  glugs, empty clicks, enemy lobs, juice-bomb whumps, wave horns, upgrade
+  chimes.
 
 ## Running it
 

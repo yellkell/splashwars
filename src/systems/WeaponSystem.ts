@@ -270,6 +270,9 @@ export class WeaponSystem extends createSystem({
         emit -= 1;
         ammo = Math.max(0, ammo - drain);
         this.fireBlob(e, rig, hand, Math.max(pull, 0.5), motion.vel, 1);
+        // Every auto ball gets its own pitch-wandering plop — the stream
+        // BURBLES over the low pump bed instead of hissing.
+        sfx.squirtShot();
       }
       e.setValue(WaterPistol, 'emit', emit);
       if (!this.squirting[hand]) {

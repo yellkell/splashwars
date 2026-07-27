@@ -27,6 +27,7 @@ import { tower as towerState } from './game/tower.js';
 import { addDrops as debugAddDrops, bank, sinks as sinkState, placedTurrets } from './game/shop.js';
 import { WaterPistol } from './components/WaterPistol.js';
 import { debugLiveDigits, debugNumbersInstance, popDamage } from './fx/damageNumbers.js';
+import { stampSplat as debugStampSplat, wipeFloor as debugWipeFloor } from './fx/juice.js';
 import { Vector3 as DebugVec3 } from 'three';
 
 const container = document.getElementById('scene-container') as HTMLDivElement;
@@ -103,6 +104,8 @@ World.create(container, {
       drops: () => ({ drops: bank.drops, shown: Math.round(bank.shown), turrets: placedTurrets.map((t) => t.kind) }),
       addDrops: (n = 500) => debugAddDrops(n),
       buyItem: (id = 'power') => world.getSystem(TurretSystem)?.purchase(id),
+      wipeFloor: () => debugWipeFloor(towerState.pos),
+      splat: (x = 0, z = -1.5, size = 0.3) => debugStampSplat(new DebugVec3(x, 0, z), size),
       sinks: () => ({ ...sinkState }),
       buyTurret: (kind = 'sprinkler', x = 0.8, z = -1.2) =>
         world.getSystem(TurretSystem)?.placeTurret(kind as never, new DebugVec3(x, 0, z)),

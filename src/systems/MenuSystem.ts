@@ -14,8 +14,10 @@
  */
 
 import { createSystem, Vector3 } from '@iwsdk/core';
-import { CanvasTexture, LinearFilter, Mesh, MeshBasicMaterial, PlaneGeometry } from 'three';
+import { CanvasTexture, Mesh, MeshBasicMaterial, PlaneGeometry } from 'three';
 import { CardBoard } from '../ui/cardBoard.js';
+import { crispTexture, logicalCanvas } from '../ui/crispCanvas.js';
+import { setTitleBannerVisible } from '../arena/banner.js';
 import { app } from '../game/appState.js';
 import { resetRun, run } from '../game/run.js';
 import { resetTower, tower } from '../game/tower.js';
@@ -25,6 +27,10 @@ import { EnemySystem } from './EnemySystem.js';
 import * as sfx from '../audio/sfx.js';
 
 const _cam = new Vector3();
+
+// The info plate's logical canvas size (drawn at 2× by crispCanvas).
+const PLATE_W = 1024;
+const PLATE_H = 420;
 
 export class MenuSystem extends createSystem({}) {
   private board!: CardBoard;
@@ -58,10 +64,17 @@ export class MenuSystem extends createSystem({}) {
       sfx.waveHorn();
     } else {
       app.phase = 'placing';
+      this.world
+        .getSystem(EnemySystem)
+        ?.setSign('POINT AT THE FLOOR — PLANT THE TOWER', '#1fc4c9');
     }
   }
 
   update(delta: number): void {
+    // The big SPLASH WARS sign belongs to the title screen ONLY — during a
+    // fight it's clutter floating over the wave lane.
+    setTitleBannerVisible(app.phase === 'title');
+
     // Show/refresh the board when the phase asks for one.
     if (app.phase === 'title' && this.shownFor !== 'title') this.showTitle();
     if (app.phase === 'gameover' && this.shownFor !== 'gameover') this.showGameOver();
@@ -141,10 +154,8 @@ export class MenuSystem extends createSystem({}) {
 
   private buildPlate(): void {
     this.plateCanvas = document.createElement('canvas');
-    this.plateCanvas.width = 1024;
-    this.plateCanvas.height = 420;
-    this.plateTex = new CanvasTexture(this.plateCanvas);
-    this.plateTex.minFilter = LinearFilter;
+    logicalCanvas(this.plateCanvas, PLATE_W, PLATE_H);
+    this.plateTex = crispTexture(this.plateCanvas);
     this.plate = new Mesh(
       new PlaneGeometry(1.7, 0.7),
       new MeshBasicMaterial({ map: this.plateTex, transparent: true }),
@@ -156,8 +167,8 @@ export class MenuSystem extends createSystem({}) {
 
   private drawPlate(kind: 'title' | 'gameover'): void {
     const ctx = this.plateCanvas.getContext('2d')!;
-    const W = this.plateCanvas.width;
-    const H = this.plateCanvas.height;
+    const W = PLATE_W;
+    const H = PLATE_H;
     ctx.clearRect(0, 0, W, H);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';

@@ -21,9 +21,10 @@
  */
 
 import { createSystem, Vector3 } from '@iwsdk/core';
-import { CanvasTexture, LinearFilter, Mesh, MeshBasicMaterial, PlaneGeometry } from 'three';
+import { CanvasTexture, Mesh, MeshBasicMaterial, PlaneGeometry } from 'three';
+import { crispTexture, logicalCanvas } from '../ui/crispCanvas.js';
 import { Swarm } from '../enemies/swarm.js';
-import { dropletBurst, initJuicePools } from '../fx/juice.js';
+import { dropletBurst, initJuicePools, wipeFloor } from '../fx/juice.js';
 import { initDamageNumbers, popDamage } from '../fx/damageNumbers.js';
 import { enemyShot, pendingBlasts, recycleBlast } from '../combat/juiceBus.js';
 import { run } from '../game/run.js';
@@ -34,6 +35,10 @@ import * as sfx from '../audio/sfx.js';
 import { SHOP as SHOP_CFG } from '../config.js';
 
 const SHOP_BONUS = SHOP_CFG.waveClearBonus;
+
+// The wave sign's logical canvas size (drawn at 2× by crispCanvas).
+const SIGN_W = 1024;
+const SIGN_H = 200;
 import {
   ENEMY,
   ENEMY_SHOT,
@@ -97,6 +102,7 @@ export class EnemySystem extends createSystem({}) {
 
   /** MenuSystem calls this when a run starts: clean board, wave 1 queued. */
   startFresh(): void {
+    wipeFloor(tower.pos); // last run's juice sweeps away as the new one starts
     for (let i = 0; i < this.swarm.px.length; i++) {
       if (this.swarm.alive[i]) this.swarm.kill(i);
     }
@@ -474,6 +480,10 @@ export class EnemySystem extends createSystem({}) {
   }
 
   private finishWave(): void {
+    // The floor comes back: an aqua ring sweeps out from the tower and
+    // slurps every splat it passes — a clean arena for the next wave.
+    wipeFloor(tower.pos);
+    sfx.floorClean();
     // Clear bonus: the later the wave, the fatter the payout.
     addDrops(WAVES.count >= run.wave ? SHOP_BONUS * run.wave : 0);
     if (run.wave >= WAVES.count) {
@@ -528,10 +538,8 @@ export class EnemySystem extends createSystem({}) {
 
   private buildSign(): void {
     this.signCanvas = document.createElement('canvas');
-    this.signCanvas.width = 1024;
-    this.signCanvas.height = 200;
-    this.signTex = new CanvasTexture(this.signCanvas);
-    this.signTex.minFilter = LinearFilter;
+    logicalCanvas(this.signCanvas, SIGN_W, SIGN_H);
+    this.signTex = crispTexture(this.signCanvas);
     this.sign = new Mesh(
       new PlaneGeometry(1.7, 0.33),
       new MeshBasicMaterial({ map: this.signTex, transparent: true }),
@@ -542,7 +550,8 @@ export class EnemySystem extends createSystem({}) {
 
   setSign(text: string, color: string): void {
     const ctx = this.signCanvas.getContext('2d')!;
-    const { width: w, height: h } = this.signCanvas;
+    const w = SIGN_W;
+    const h = SIGN_H;
     ctx.clearRect(0, 0, w, h);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -553,7 +562,12 @@ export class EnemySystem extends createSystem({}) {
     ctx.lineWidth = 10;
     ctx.strokeStyle = color;
     ctx.stroke();
-    ctx.font = '900 84px system-ui, -apple-system, sans-serif';
+    // Auto-fit: shrink the type until the line fits the plate.
+    let size = 84;
+    do {
+      ctx.font = `900 ${size}px system-ui, -apple-system, sans-serif`;
+      size -= 4;
+    } while (size > 28 && ctx.measureText(text).width > w - 150);
     ctx.fillStyle = color;
     ctx.fillText(text, w / 2, h / 2 + 4);
     this.signTex.needsUpdate = true;

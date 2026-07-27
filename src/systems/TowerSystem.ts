@@ -2,9 +2,9 @@
  * THE JUICE TOWER — placement, rendering, damage, destruction.
  *
  * PLACEMENT: after you shoot START, a translucent cyan GHOST of the tower
- * glides across your real floor wherever you look ("place the tower in the
- * middle of your play space"). Pull either trigger and it plants: the ghost
- * solidifies, the horn sounds, wave one rolls in.
+ * glides across your real floor wherever your HAND points ("place the tower
+ * in the middle of your play space"). Pull the trigger and it plants: the
+ * ghost solidifies, the horn sounds, wave one rolls in.
  *
  * THE TOWER is a water-tower silhouette in the pistols' white/red sports
  * kit: four legs up to a big FROSTED RESERVOIR with a red cap — and inside
@@ -15,6 +15,7 @@
  */
 
 import { createSystem, InputComponent, Vector3 } from '@iwsdk/core';
+import { placementSpot } from '../input/pointRay.js';
 import {
   Group,
   Mesh,
@@ -38,8 +39,6 @@ import { dropletBurst, stampSplat } from '../fx/juice.js';
 import * as sfx from '../audio/sfx.js';
 import { PALETTE, TOWER } from '../config.js';
 
-const _fwd = new Vector3();
-const _head = new Vector3();
 const _spot = new Vector3();
 const _tank = new Vector3();
 const _still = new Vector3(); // zero accel — the tower doesn't get waved about
@@ -204,20 +203,8 @@ export class TowerSystem extends createSystem({}) {
   // --- Placement. ----------------------------------------------------------
 
   private updatePlacing(): void {
-    const cam = this.world.camera;
-    cam.getWorldPosition(_head);
-    cam.getWorldDirection(_fwd);
-
-    // Project the gaze onto the floor; clamp to a sane placing band.
-    let t = _fwd.y < -0.05 ? -_head.y / _fwd.y : Infinity;
-    if (!isFinite(t)) t = TOWER.placeMax * 2; // looking up: push to max range
-    _spot.copy(_head).addScaledVector(_fwd, t);
-    _spot.y = 0;
-    const dx = _spot.x - _head.x;
-    const dz = _spot.z - _head.z;
-    const d = Math.hypot(dx, dz) || 1e-3;
-    const clamped = Math.min(TOWER.placeMax, Math.max(TOWER.placeMin, d));
-    _spot.set(_head.x + (dx / d) * clamped, 0, _head.z + (dz / d) * clamped);
+    // The ghost rides your HAND ray (see input/pointRay.ts), not your gaze.
+    placementSpot(this.world, _spot);
 
     this.ghost.visible = true;
     this.ghostRing.visible = true;

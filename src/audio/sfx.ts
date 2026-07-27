@@ -79,6 +79,30 @@ function noiseBurst(freq: number, q: number, dur: number, gain: number, sweepTo?
   src.stop(t + dur + 0.05);
 }
 
+/**
+ * The water-droplet gesture — a sine that dips, then swoops UP. This is the
+ * shape of every "round" liquid sound (a drip into a pool, a bottle glug):
+ * the pitch bend reads as surface tension letting go. Fast = plop, slow =
+ * slurp.
+ */
+function bloop(from: number, dip: number, to: number, dur: number, gain: number): void {
+  const c = ready();
+  if (!c) return;
+  const t = c.currentTime;
+  const o = c.createOscillator();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(from, t);
+  o.frequency.exponentialRampToValueAtTime(Math.max(20, dip), t + dur * 0.3);
+  o.frequency.exponentialRampToValueAtTime(Math.max(20, to), t + dur);
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(gain, t + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g).connect(c._master!);
+  o.start(t);
+  o.stop(t + dur + 0.05);
+}
+
 /** A little glided sine — glugs, pops, toy blips. */
 function blip(from: number, to: number, dur: number, gain: number, type: OscillatorType = 'sine'): void {
   const c = ready();
@@ -106,27 +130,32 @@ interface SquirtVoice {
 
 const squirts: (SquirtVoice | undefined)[] = [undefined, undefined];
 
-/** Start (or keep running) the pressurised-water hiss for a hand. */
+/**
+ * Start (or keep running) the full-auto undertone for a hand. NOT a hiss:
+ * a deep LOWPASSED gurgle — noise strangled down to its watery bottom end,
+ * slowly wobbled so it churns like a pump working. It sits quietly UNDER
+ * the per-ball plops and just glues them into one stream.
+ */
 export function squirtStart(hand: 0 | 1): void {
   const c = ready();
   if (!c || squirts[hand]) return;
   const src = c.createBufferSource();
   src.buffer = noise(c);
   src.loop = true;
-  const bp = c.createBiquadFilter();
-  bp.type = 'bandpass';
-  bp.frequency.value = hand === 0 ? 2300 : 2600; // the pair don't unison
-  bp.Q.value = 1.4;
-  // LFO warbles the filter so the stream burbles instead of hissing flat.
+  const lp = c.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = hand === 0 ? 420 : 480; // the pair don't unison
+  lp.Q.value = 1.1;
+  // A slow LFO churns the cutoff so the bed glugs instead of droning.
   const lfo = c.createOscillator();
-  lfo.frequency.value = 11 + hand * 2.5;
+  lfo.frequency.value = 5.5 + hand * 1.3;
   const lfoGain = c.createGain();
-  lfoGain.gain.value = 420;
-  lfo.connect(lfoGain).connect(bp.frequency);
+  lfoGain.gain.value = 180;
+  lfo.connect(lfoGain).connect(lp.frequency);
   const g = c.createGain();
   g.gain.setValueAtTime(0.0001, c.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.16, c.currentTime + 0.06);
-  src.connect(bp).connect(g).connect(c._master!);
+  g.gain.exponentialRampToValueAtTime(0.09, c.currentTime + 0.08);
+  src.connect(lp).connect(g).connect(c._master!);
   src.start();
   lfo.start();
   squirts[hand] = { src, gain: g, lfo };
@@ -187,10 +216,17 @@ export function gunBurst(): void {
   noiseBurst(800, 0.9, 0.45, 0.32, 220);
 }
 
-/** One semi-auto shot — a tight squirt chirp (the loop is for full-auto). */
+/**
+ * One shot — a round wet PLOP: the dip-and-swoop droplet body, a low pump
+ * thump for weight, and the smallest lowpassed spit. Pitch wanders shot to
+ * shot so full-auto reads as a BURBLING stream of fat droplets instead of
+ * one chirp stamped on repeat.
+ */
 export function squirtShot(): void {
-  noiseBurst(2100, 1.6, 0.09, 0.18, 900);
-  blip(340, 180, 0.06, 0.08, 'triangle');
+  const p = 0.9 + Math.random() * 0.22;
+  bloop(300 * p, 185 * p, 640 * p, 0.11, 0.34);
+  blip(130 * p, 55, 0.09, 0.2);
+  noiseBurst(520 * p, 0.9, 0.06, 0.09, 220);
 }
 
 /** The tower planting — a big chunky plastic KACHUNK and a settle glug. */
@@ -223,9 +259,17 @@ export function denied(): void {
   blip(180, 140, 0.18, 0.2, 'square');
 }
 
-/** A turret firing — a lighter cousin of your own squirt. */
+/** A turret firing — a smaller, higher cousin of your own plop. */
 export function turretShot(): void {
-  noiseBurst(2600, 1.8, 0.06, 0.1, 1200);
+  const p = 1.2 + Math.random() * 0.2;
+  bloop(300 * p, 200 * p, 620 * p, 0.08, 0.11);
+}
+
+/** The between-wave floor wipe — a long slurp as the juice gets drunk back. */
+export function floorClean(): void {
+  bloop(140, 90, 720, 0.55, 0.22);
+  noiseBurst(420, 0.8, 0.6, 0.09, 1500);
+  setTimeout(() => blip(520, 940, 0.14, 0.1), 430);
 }
 
 /** Stolen juice pouring back into the reservoir — a happy triple glug. */

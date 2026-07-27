@@ -91,14 +91,6 @@ export function createWaterPistol(): WaterPistolRig {
     stripe.position.set(side * 0.0215, 0.058, -0.05);
     group.add(stripe);
   }
-  // Low-profile red fin sight, swept back like a spoiler. It rides the
-  // barrel root, forward of the tank — the tank capsule reaches to about
-  // z -0.134 / y 0.084, and a fin under the bottle pierced the glass.
-  const fin = new Mesh(new BoxGeometry(0.005, 0.018, 0.042), accentMat);
-  fin.position.set(0, 0.082, -0.168);
-  fin.rotation.x = -0.18;
-  group.add(fin);
-
   // --- Barrel + nozzle: long, tapered, red collar at the muzzle. ---
   const barrel = new Mesh(zCyl(0.013, 0.017, 0.13), shellMat);
   barrel.position.set(0, 0.054, -0.195);
@@ -126,13 +118,16 @@ export function createWaterPistol(): WaterPistolRig {
   triggerPivot.position.set(0, 0.028, -0.062);
   group.add(triggerPivot);
   const trigger = new Mesh(new BoxGeometry(0.012, 0.04, 0.01), accentMat);
-  trigger.position.set(0, -0.025, 0.004);
+  trigger.position.set(0, -0.023, 0.004);
   trigger.rotation.x = 0.18;
   triggerPivot.add(trigger);
-  const guard = new Mesh(new TorusGeometry(0.026, 0.0042, 10, 22, Math.PI), accentMat);
+  // The guard's half-ring is sized so BOTH ends bury into the receiver's
+  // underside (body bottom is y 0.02) — a smaller ring left its ends
+  // hanging in mid-air below the gun.
+  const guard = new Mesh(new TorusGeometry(0.042, 0.0042, 10, 22, Math.PI), accentMat);
   guard.rotation.y = Math.PI / 2;
   guard.rotation.z = Math.PI;
-  guard.position.set(0, 0.006, -0.058);
+  guard.position.set(0, 0.022, -0.058);
   group.add(guard);
 
   // --- THE TANK: clear shell on top, juice sloshing inside. ---

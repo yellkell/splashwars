@@ -17,13 +17,13 @@
 import {
   CanvasTexture,
   Group,
-  LinearFilter,
   Mesh,
   MeshBasicMaterial,
   PlaneGeometry,
   Vector3,
   type Scene,
 } from 'three';
+import { crispTexture, logicalCanvas } from './crispCanvas.js';
 import { dropletBurst } from '../fx/juice.js';
 import * as sfx from '../audio/sfx.js';
 import { UPGRADES } from '../config.js';
@@ -178,10 +178,8 @@ export class CardBoard {
   private buildCard(spec: CardSpec): Card {
     const scale = spec.scale ?? 1;
     const canvas = document.createElement('canvas');
-    canvas.width = CARD_PX_W;
-    canvas.height = CARD_PX_H;
-    const tex = new CanvasTexture(canvas);
-    tex.minFilter = LinearFilter;
+    logicalCanvas(canvas, CARD_PX_W, CARD_PX_H);
+    const tex = crispTexture(canvas);
     const w = UPGRADES.cardWidth * scale;
     const h = UPGRADES.cardHeight * scale;
     const mesh = new Mesh(

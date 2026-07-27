@@ -11,8 +11,9 @@
  * BIG TANKS and RESERVOIR levels you can buy again and again, each level
  * pricier than the last, so late-run money always has somewhere to go and
  * every purchase is a permanent base-stat bump. A card you can't afford shakes its
- * juice off with a dead buzz. Buying a turret hands you a ghost that glides
- * on your gaze; trigger plants it. The fight does not pause.
+ * juice off with a dead buzz. Buying a turret hands you a ghost that rides
+ * your hand's point (input/pointRay.ts); trigger plants it. The fight does
+ * not pause.
  *
  * PERFORMANCE: turrets are built from MODULE-CACHED geometry and materials —
  * every static part of a turret kind is pre-merged into two meshes (shell +
@@ -34,7 +35,6 @@ import {
   CanvasTexture,
   Euler,
   Group,
-  LinearFilter,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
@@ -50,6 +50,8 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CardBoard } from '../ui/cardBoard.js';
+import { crispTexture, logicalCanvas } from '../ui/crispCanvas.js';
+import { placementSpot } from '../input/pointRay.js';
 import { app } from '../game/appState.js';
 import { bank, build, placedTurrets, sinkCost, sinks, spendDrops } from '../game/shop.js';
 import { tower } from '../game/tower.js';
@@ -63,7 +65,6 @@ import {
   SHOP,
   SINK_DEFS,
   SINK_RESERVOIR_PER_LEVEL,
-  TOWER,
   TURRET,
   TURRET_DEFS,
   TurretKind,
@@ -72,8 +73,11 @@ import {
 
 const HANDS = ['left', 'right'] as const;
 
+// The watch face's logical canvas size (drawn at 2× by crispCanvas).
+const WATCH_W = 320;
+const WATCH_H = 160;
+
 const _cam = new Vector3();
-const _fwd = new Vector3();
 const _spot = new Vector3();
 const _muzzle = new Vector3();
 const _vel = new Vector3();
@@ -333,7 +337,7 @@ export class TurretSystem extends createSystem({}) {
     }
   }
 
-  // --- Placement (the same gaze-ghost ritual as the tower). ----------------
+  // --- Placement (the same point-and-plant ritual as the tower). -----------
 
   private updatePlacing(kind: TurretKindId): void {
     if (!this.ghost) {
@@ -345,18 +349,8 @@ export class TurretSystem extends createSystem({}) {
       this.ghostRing.rotation.x = -Math.PI / 2;
       this.world.scene.add(this.ghost, this.ghostRing);
     }
-    const cam = this.world.camera;
-    cam.getWorldPosition(_cam);
-    cam.getWorldDirection(_fwd);
-    let t = _fwd.y < -0.05 ? -_cam.y / _fwd.y : Infinity;
-    if (!isFinite(t)) t = TOWER.placeMax * 2;
-    _spot.copy(_cam).addScaledVector(_fwd, t);
-    _spot.y = 0;
-    const dx = _spot.x - _cam.x;
-    const dz = _spot.z - _cam.z;
-    const d = Math.hypot(dx, dz) || 1e-3;
-    const clamped = Math.min(TOWER.placeMax, Math.max(TOWER.placeMin, d));
-    _spot.set(_cam.x + (dx / d) * clamped, 0, _cam.z + (dz / d) * clamped);
+    // Same hand-ray pointer as the tower: the ghost goes where you point.
+    placementSpot(this.world, _spot);
 
     this.ghost.position.copy(_spot);
     this.ghostRing!.position.set(_spot.x, 0.012, _spot.z);
@@ -500,10 +494,8 @@ export class TurretSystem extends createSystem({}) {
 
   private buildWatch(): void {
     this.watchCanvas = document.createElement('canvas');
-    this.watchCanvas.width = 320;
-    this.watchCanvas.height = 160;
-    this.watchTex = new CanvasTexture(this.watchCanvas);
-    this.watchTex.minFilter = LinearFilter;
+    logicalCanvas(this.watchCanvas, WATCH_W, WATCH_H);
+    this.watchTex = crispTexture(this.watchCanvas);
     this.watch = new Mesh(
       new PlaneGeometry(0.085, 0.0425),
       new MeshBasicMaterial({ map: this.watchTex, transparent: true, depthTest: false }),
@@ -535,8 +527,8 @@ export class TurretSystem extends createSystem({}) {
 
   private drawWatch(value: number): void {
     const ctx = this.watchCanvas.getContext('2d')!;
-    const W = this.watchCanvas.width;
-    const H = this.watchCanvas.height;
+    const W = WATCH_W;
+    const H = WATCH_H;
     ctx.clearRect(0, 0, W, H);
     ctx.textBaseline = 'middle';
     ctx.fillStyle = 'rgba(20,26,34,0.85)';

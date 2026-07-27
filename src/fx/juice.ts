@@ -21,11 +21,14 @@ import {
   BufferGeometry,
   InstancedMesh,
   Matrix4,
+  Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   NormalBlending,
   Object3D,
   Points,
   Quaternion,
+  RingGeometry,
   ShaderMaterial,
   SphereGeometry,
   Vector3,
@@ -144,10 +147,29 @@ function splatTexture(): CanvasTexture {
   return new CanvasTexture(canvas);
 }
 
+/** How fast the between-wave wipe ring expands, m/s. */
+const WIPE_SPEED = 2.6;
+/** Seconds for one splat to shrink away once the ring passes it. */
+const WIPE_SHRINK = 0.35;
+
 /** Flat juice stamps on the floor/deck; a ring buffer so old juice recycles. */
 export class SplatPool {
   readonly mesh: InstancedMesh;
   private cursor = 0;
+  // Per-slot state so splats can be animated after they're stamped.
+  private readonly px = new Float32Array(MAX_SPLATS);
+  private readonly py = new Float32Array(MAX_SPLATS);
+  private readonly pz = new Float32Array(MAX_SPLATS);
+  private readonly yaw = new Float32Array(MAX_SPLATS);
+  private readonly siz = new Float32Array(MAX_SPLATS); // 0 = empty slot
+  private readonly shrink = new Float32Array(MAX_SPLATS).fill(-1); // <0 = not shrinking
+  // THE WIPE: between waves an aqua ring sweeps out from the tower and
+  // every splat it passes is slurped away — the floor comes back clean.
+  wipeActive = false;
+  wipeX = 0;
+  wipeZ = 0;
+  wipeR = 0;
+  wipeMax = 1;
 
   constructor() {
     const geo = new CircleGeometry(1, 24);
@@ -180,12 +202,77 @@ export class SplatPool {
   stamp(pos: Vector3, size: number): void {
     const i = this.cursor;
     this.cursor = (this.cursor + 1) % MAX_SPLATS;
-    _dummy.position.set(pos.x, pos.y + 0.004 + (this.cursor % 16) * 0.0004, pos.z);
-    _dummy.rotation.set(0, Math.random() * Math.PI * 2, 0);
-    _dummy.scale.setScalar(size * (0.8 + Math.random() * 0.5));
+    this.px[i] = pos.x;
+    this.py[i] = pos.y + 0.004 + (this.cursor % 16) * 0.0004;
+    this.pz[i] = pos.z;
+    this.yaw[i] = Math.random() * Math.PI * 2;
+    this.siz[i] = size * (0.8 + Math.random() * 0.5);
+    this.shrink[i] = -1;
+    this.compose(i, 1);
+    this.mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  /** Start the wipe: a ring from (cx,cz) that reaches every live splat. */
+  beginWipe(cx: number, cz: number): void {
+    this.wipeActive = true;
+    this.wipeX = cx;
+    this.wipeZ = cz;
+    this.wipeR = 0;
+    let max = 1;
+    for (let i = 0; i < MAX_SPLATS; i++) {
+      if (this.siz[i] <= 0) continue;
+      max = Math.max(max, Math.hypot(this.px[i] - cx, this.pz[i] - cz));
+    }
+    this.wipeMax = max + 0.6;
+  }
+
+  /** Advance the wipe ring and any shrinking splats. Call once per frame. */
+  update(dt: number): void {
+    if (this.wipeActive) {
+      this.wipeR += WIPE_SPEED * dt;
+      if (this.wipeR > this.wipeMax) this.wipeActive = false;
+    }
+    let dirty = false;
+    // Droplet sparkles as splats get slurped, budgeted so a floor covered
+    // in juice doesn't burst hundreds of particles in one frame.
+    let sparkles = 3;
+    for (let i = 0; i < MAX_SPLATS; i++) {
+      if (this.siz[i] <= 0) continue;
+      if (this.shrink[i] < 0) {
+        if (!this.wipeActive) continue;
+        const dx = this.px[i] - this.wipeX;
+        const dz = this.pz[i] - this.wipeZ;
+        if (dx * dx + dz * dz > this.wipeR * this.wipeR) continue;
+        // The ring just reached this splat: start its shrink, flick a few
+        // droplets up off it so the clean-up reads as the juice LEAVING.
+        this.shrink[i] = 0;
+        if (sparkles > 0) {
+          sparkles--;
+          dropletBurst(_dummy.position.set(this.px[i], 0.02, this.pz[i]), 4, 0.7);
+        }
+      }
+      this.shrink[i] += dt / WIPE_SHRINK;
+      const k = 1 - this.shrink[i];
+      if (k <= 0) {
+        this.siz[i] = 0;
+        this.shrink[i] = -1;
+        _m.makeScale(0, 0, 0);
+        this.mesh.setMatrixAt(i, _m);
+      } else {
+        // Accelerating shrink with a slight spin — swirling down a drain.
+        this.compose(i, k * k, this.shrink[i] * 1.8);
+      }
+      dirty = true;
+    }
+    if (dirty) this.mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  private compose(i: number, scale: number, extraYaw = 0): void {
+    _dummy.position.set(this.px[i], this.py[i], this.pz[i]);
+    _dummy.rotation.set(0, this.yaw[i] + extraYaw, 0);
+    _dummy.scale.setScalar(this.siz[i] * scale);
     _dummy.updateMatrix();
     this.mesh.setMatrixAt(i, _dummy.matrix);
-    this.mesh.instanceMatrix.needsUpdate = true;
   }
 }
 
@@ -285,6 +372,7 @@ class DropletPool {
 let blobPool: BlobPool | undefined;
 let splatPool: SplatPool | undefined;
 let dropletPool: DropletPool | undefined;
+let wipeRing: Mesh | undefined;
 
 /** Create the shared pools and add them to the scene. Call once at boot. */
 export function initJuicePools(scene: Scene): { blobs: BlobPool; splats: SplatPool } {
@@ -292,14 +380,45 @@ export function initJuicePools(scene: Scene): { blobs: BlobPool; splats: SplatPo
     blobPool = new BlobPool();
     splatPool = new SplatPool();
     dropletPool = new DropletPool(768);
-    scene.add(blobPool.mesh, splatPool!.mesh, dropletPool.points);
+    // The wipe ring: a unit floor ring scaled out to the wipe radius.
+    const ringGeo = new RingGeometry(0.9, 1, 64);
+    ringGeo.rotateX(-Math.PI / 2);
+    wipeRing = new Mesh(
+      ringGeo,
+      new MeshBasicMaterial({
+        color: PALETTE.water,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+      }),
+    );
+    wipeRing.position.y = 0.01;
+    wipeRing.visible = false;
+    scene.add(blobPool.mesh, splatPool!.mesh, dropletPool.points, wipeRing);
   }
   return { blobs: blobPool, splats: splatPool! };
 }
 
-/** Integrate droplets. Call once per frame (JuiceSystem does). */
+/** Integrate droplets and the floor wipe. Call once per frame (JuiceSystem does). */
 export function updateJuicePools(dt: number): void {
   dropletPool?.update(dt);
+  splatPool?.update(dt);
+  if (wipeRing && splatPool) {
+    wipeRing.visible = splatPool.wipeActive;
+    if (splatPool.wipeActive) {
+      wipeRing.position.x = splatPool.wipeX;
+      wipeRing.position.z = splatPool.wipeZ;
+      wipeRing.scale.setScalar(Math.max(0.01, splatPool.wipeR));
+      // Fade as it travels so it dies out at the edge of the mess.
+      (wipeRing.material as MeshBasicMaterial).opacity =
+        0.55 * (1 - splatPool.wipeR / splatPool.wipeMax);
+    }
+  }
+}
+
+/** Sweep the floor clean from a point — the between-wave reset. */
+export function wipeFloor(center: Vector3): void {
+  splatPool?.beginWipe(center.x, center.z);
 }
 
 /** Stamp a floor splat directly (thrown guns burst outside JuiceSystem). */
