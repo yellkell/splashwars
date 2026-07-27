@@ -21,7 +21,7 @@ import {
   BufferGeometry,
   InstancedMesh,
   Matrix4,
-  MeshBasicMaterial,
+  MeshStandardMaterial,
   NormalBlending,
   Object3D,
   Points,
@@ -31,7 +31,7 @@ import {
   Vector3,
   type Scene,
 } from 'three';
-import { glossyPlastic } from '../materials/plastic.js';
+import { wetPaint } from '../materials/plastic.js';
 import { ENEMY_SHOT, PALETTE, PISTOL } from '../config.js';
 
 const _m = new Matrix4();
@@ -54,7 +54,7 @@ export class BlobPool {
 
   constructor() {
     const geo = new SphereGeometry(PISTOL.blobRadius, 12, 10);
-    const mat = glossyPlastic(PALETTE.paint, 0.12);
+    const mat = wetPaint(PALETTE.paint);
     this.mesh = new InstancedMesh(geo, mat, MAX_BLOBS);
     this.mesh.instanceMatrix.setUsage(DynamicDrawUsage);
     this.mesh.frustumCulled = false;
@@ -131,6 +131,16 @@ function splatTexture(): CanvasTexture {
     ctx.arc(cx + Math.cos(a) * d, cx + Math.sin(a) * d, r, 0, Math.PI * 2);
     ctx.fill();
   }
+  // A soft baked wet highlight across the puddle, so even a splat that no
+  // light catches still reads as gloss, not chalk.
+  const hl = ctx.createRadialGradient(cx - size * 0.12, cx - size * 0.14, 0, cx, cx, size * 0.4);
+  hl.addColorStop(0, 'rgba(255,255,255,0.55)');
+  hl.addColorStop(0.35, 'rgba(255,255,255,0.12)');
+  hl.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.globalCompositeOperation = 'source-atop';
+  ctx.fillStyle = hl;
+  ctx.fillRect(0, 0, size, size);
+  ctx.globalCompositeOperation = 'source-over';
   return new CanvasTexture(canvas);
 }
 
@@ -142,8 +152,12 @@ export class SplatPool {
   constructor() {
     const geo = new CircleGeometry(1, 24);
     geo.rotateX(-Math.PI / 2); // lie flat on the floor
-    const mat = new MeshBasicMaterial({
+    // Lit and near-mirror-smooth: the scene's point lights streak across
+    // the puddles as you move your head — cheap, and very "wet floor".
+    const mat = new MeshStandardMaterial({
       map: splatTexture(),
+      roughness: 0.12,
+      metalness: 0,
       transparent: true,
       depthWrite: false,
       polygonOffset: true,
@@ -221,10 +235,11 @@ class DropletPool {
         void main(){ if(vLife<=0.0) discard;
           vec2 d = gl_PointCoord - 0.5; float r = length(d);
           if(r>0.5) discard;
-          // Hard round droplet with a subtle top-lit gloss — thick paint,
-          // not glowing spray.
+          // Hard round droplet with a wet catchlight up-left — thick
+          // glossy paint, not glowing spray.
           float lit = 0.85 + 0.3 * max(0.0, -d.y * 2.0);
-          gl_FragColor = vec4(vColor * lit, smoothstep(0.5, 0.42, r)); }
+          float spec = smoothstep(0.16, 0.0, length(d + vec2(0.14, -0.14))) * 0.9;
+          gl_FragColor = vec4(vColor * lit + spec, smoothstep(0.5, 0.42, r)); }
       `,
       transparent: true,
       blending: NormalBlending,

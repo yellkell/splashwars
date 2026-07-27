@@ -114,17 +114,21 @@ const LIQUID_FRAG = /* glsl */ `
     }
 
     // The body of the paint: simple fixed-key shading so it reads THICK —
-    // deep colour below, lit colour up top, a soft fresnel gloss.
+    // deep colour below, lit colour up top.
     float up = clamp(vWorldNormal.y * 0.5 + 0.5, 0.0, 1.0);
     vec3 col = mix(uDeepColor, uColor, up * 0.75 + 0.25);
     // Meniscus: a foam band hugging the underside of the surface plane.
     col = mix(col, uFoamColor, smoothstep(-0.010, -0.002, d) * 0.85);
-    // Cheap view-independent rim gloss (a real fresnel needs cameraPosition;
-    // this stays stable in stereo and costs nothing).
-    float gloss = pow(1.0 - abs(vWorldNormal.y), 3.0) * 0.18;
+    // Wet gloss: a real Blinn-Phong glint off a fixed key light, tracking
+    // the camera, so the paint gleams as the tank turns in your hand.
+    vec3 n = normalize(vWorldNormal);
+    vec3 lightDir = normalize(vec3(0.35, 0.85, 0.4));
+    vec3 viewDir = normalize(cameraPosition - vWorldPos);
+    float spec = pow(max(dot(n, normalize(lightDir + viewDir)), 0.0), 80.0);
+    col += spec * 0.85;
     // FULLY OPAQUE: thick paint is not see-through. Anything less and you
     // catch the tank's far wall (and the room) straight through the liquid.
-    gl_FragColor = vec4(col + gloss, 1.0);
+    gl_FragColor = vec4(col, 1.0);
   }
 `;
 

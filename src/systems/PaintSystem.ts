@@ -20,7 +20,7 @@
 
 import { createSystem, Vector3 } from '@iwsdk/core';
 import { EnemySystem } from './EnemySystem.js';
-import { UpgradeSystem } from './UpgradeSystem.js';
+import { activeBoards } from '../ui/cardBoard.js';
 import {
   pendingBlobs,
   pendingEnemyShots,
@@ -74,7 +74,6 @@ export class PaintSystem extends createSystem({}) {
   update(delta: number): void {
     this.splatSfxAcc = Math.max(0, this.splatSfxAcc - delta);
     const enemies = this.world.getSystem(EnemySystem);
-    const upgrades = this.world.getSystem(UpgradeSystem);
     const swarm = enemies?.swarm;
 
     this.world.camera.getWorldPosition(_head);
@@ -143,8 +142,15 @@ export class PaintSystem extends createSystem({}) {
           }
         }
 
-        // --- Your paint vs the upgrade cards (shoot to pick). ---
-        if (!hit && upgrades?.isActive && upgrades.testHit(_pos, radius)) hit = true;
+        // --- Your paint vs any card board on screen (menus, upgrades). ---
+        if (!hit) {
+          for (const board of activeBoards) {
+            if (board.testHit(_pos, radius)) {
+              hit = true;
+              break;
+            }
+          }
+        }
       }
 
       // --- Floor landing: stamp the splat. ---

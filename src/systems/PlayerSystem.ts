@@ -24,8 +24,9 @@ import {
   Group,
 } from 'three';
 import { EnemySystem } from './EnemySystem.js';
-import { glossyPlastic } from '../materials/plastic.js';
-import { resetRun, run, UpgradeId } from '../game/run.js';
+import { wetPaint } from '../materials/plastic.js';
+import { run, UpgradeId } from '../game/run.js';
+import { app } from '../game/appState.js';
 import { dropletBurst } from '../fx/paint.js';
 import * as sfx from '../audio/sfx.js';
 import { ORBITALS, PALETTE, PLAYER } from '../config.js';
@@ -105,15 +106,16 @@ export class PlayerSystem extends createSystem({}) {
     const target = Math.min(1, wounded * 0.85 + run.hurt * 0.5);
     this.visorMat.opacity += (target - this.visorMat.opacity) * Math.min(1, delta * 6);
 
-    // --- Death: a beat on the floor, then a fresh run. ---
+    // --- Death: a beat under the paint, then the game-over board. ---
     if (run.dead) {
       run.deathTimer -= delta;
-      if (run.deathTimer <= 0) {
-        resetRun();
-        // Clear the swarm too, or the crowd that killed you is still
-        // standing on your deck the instant you come back.
+      if (run.deathTimer <= 0 && app.phase === 'playing') {
+        // Wipe the crowd that killed you and hand off to MenuSystem's
+        // game-over board (AGAIN / MENU). Stats stay on `run` for display;
+        // startRun() resets them when you go again.
         this.world.getSystem(EnemySystem)?.resetFight();
-        sfx.waveHorn();
+        app.phase = 'gameover';
+        sfx.playerDown();
       }
       return;
     }
@@ -129,7 +131,7 @@ export class PlayerSystem extends createSystem({}) {
     while (this.globes.length < wanted) {
       const globe = new Mesh(
         new SphereGeometry(ORBITALS.globeRadius, 14, 12),
-        glossyPlastic(PALETTE.paint, 0.1),
+        wetPaint(PALETTE.paint),
       );
       this.globes.push(globe);
       this.orbitGroup.add(globe);

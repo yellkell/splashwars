@@ -18,7 +18,9 @@ import { PaintSystem } from './systems/PaintSystem.js';
 import { EnemySystem } from './systems/EnemySystem.js';
 import { UpgradeSystem } from './systems/UpgradeSystem.js';
 import { PlayerSystem } from './systems/PlayerSystem.js';
+import { MenuSystem } from './systems/MenuSystem.js';
 import { run } from './game/run.js';
+import { app } from './game/appState.js';
 import { WaterPistol } from './components/WaterPistol.js';
 import { debugLiveDigits, debugNumbersInstance, popDamage } from './fx/damageNumbers.js';
 import { Vector3 as DebugVec3 } from 'three';
@@ -56,6 +58,7 @@ World.create(container, {
   // hits before the wave director resolves deaths and area damage.
   world.registerSystem(EnemySystem);
   world.registerSystem(UpgradeSystem);
+  world.registerSystem(MenuSystem);
   world.registerSystem(WeaponSystem);
   world.registerSystem(PaintSystem);
   world.registerSystem(PlayerSystem);
@@ -81,6 +84,8 @@ World.create(container, {
         return -1;
       },
       digits: () => debugLiveDigits(),
+      startGame: () => world.getSystem(MenuSystem)?.startRun(),
+      appPhase: () => app.phase,
       pistols: () => {
         const ws = world.getSystem(WeaponSystem);
         if (!ws) return [];

@@ -7,6 +7,21 @@
 
 import { MeshPhysicalMaterial, MeshStandardMaterial, type ColorRepresentation } from 'three';
 
+/**
+ * WET PAINT — the glossiest thing in the game. Paint balls, orbiter globes,
+ * anything that reads as fresh liquid paint: near-zero roughness under a
+ * tight clearcoat, so every light in the scene leaves a hot little glint.
+ */
+export function wetPaint(color: ColorRepresentation): MeshPhysicalMaterial {
+  return new MeshPhysicalMaterial({
+    color,
+    roughness: 0.05,
+    metalness: 0,
+    clearcoat: 1,
+    clearcoatRoughness: 0.03,
+  });
+}
+
 /** Glossy injection-moulded shell — pistol bodies, deck rim, enemy shells. */
 export function glossyPlastic(color: ColorRepresentation, roughness = 0.28): MeshPhysicalMaterial {
   return new MeshPhysicalMaterial({

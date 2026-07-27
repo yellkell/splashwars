@@ -54,7 +54,7 @@ export const PISTOL = {
   blobRadius: 0.052, // collision + visual radius — a big fat cricket ball
   gravity: 2.0, // gentle arc so the balls still reach the spawn ring
   lifetime: 3.0, // seconds of flight before a ball is culled
-  damage: 34, // damage per landed ball (see ENEMY_TYPES for HP pools)
+  damage: 40, // damage per landed ball (see ENEMY_TYPES for HP pools)
 
   // Feel.
   hapticEvery: 1, // a chunky ball deserves a thump per shot
@@ -121,7 +121,7 @@ export const WAVES = {
   growth: 1.35, // squad size multiplier per wave — this is the swarm curve
   baseSpeed: 0.34, // m/s drift toward the deck on wave 1
   speedPerWave: 0.04, // extra m/s per wave
-  hpPerWave: 0.18, // fractional HP bump per wave
+  hpPerWave: 0.11, // fractional HP bump per wave
   spawnRadius: [6.0, 9.5] as [number, number], // ring the squad appears on
   /**
    * Enemies only ever come from the FRONT — this arc, centred on -Z (the
@@ -147,20 +147,26 @@ export const ENEMY = {
 };
 
 /**
- * The roster. Every type is the same instanced blob shape with different
- * numbers and a different shell tint, so a thousand of them still cost one
- * draw call — the variety is in behaviour, size and threat.
+ * The roster — POOL TOYS. The creative direction: everything that attacks
+ * you escaped from a pool inflatables crate, so each type is a silhouette
+ * you can read across the room (see enemies/geometry.ts): a striped beach
+ * ball, a squirt droplet, a knotted water balloon, an inflatable duck, a
+ * clump of foam bubbles, and a giant crowned duck for the boss.
  *
- * `attack` is damage dealt to YOU: chargers/brutes on contact at the deck
- * rim, lobbers by throwing a paint ball at you from range.
+ * `attack` is damage dealt to YOU: melee toys on contact at the deck rim,
+ * ranged toys by throwing a paint ball at you from range.
+ *
+ * Balance: tuned soft. PISTOL.damage is 40, so a Squirt is one clean hit,
+ * a Bobber two, a Slinger three — the swarm is a mowing fantasy, and the
+ * threat comes from volume and the Big Ducks, not from bullet sponges.
  */
 export const EnemyKind = {
-  Drifter: 0, // the baseline toy: slow, soft, arrives in crowds
-  Scurrier: 1, // small, quick, low HP — swarms and nips at you
-  Lobber: 2, // holds at range and throws paint at you — the real threat
-  Brute: 3, // big, slow, tanky, hits hard
-  Splitter: 4, // pops into a spray of scurriers
-  Boss: 5, // the wave-10 monster
+  Drifter: 0, // "Bobber" — striped beach ball, slow, arrives in crowds
+  Scurrier: 1, // "Squirt" — water droplet, quick, one-hit pop
+  Lobber: 2, // "Slinger" — knotted water balloon, throws paint from range
+  Brute: 3, // "Big Duck" — inflatable pool duck, big, tanky, hits hard
+  Splitter: 4, // "Foamer" — bubble clump that bursts into Squirts
+  Boss: 5, // "THE BIG ONE" — the wave-10 crowned colossus duck
 } as const;
 export type EnemyKindId = (typeof EnemyKind)[keyof typeof EnemyKind];
 
@@ -170,6 +176,8 @@ export interface EnemyTypeDef {
   hp: number;
   speed: number; // multiplier on the wave's base speed
   tint: number; // unpainted shell colour
+  accent: number; // beaks, knots, fins, crowns (vertex-role accent)
+  stripes?: number; // beach-ball shader stripes (segment count)
   attack: number; // damage per hit on the player
   attackInterval: number; // seconds between its attacks
   ranged: boolean; // true = throws at you instead of touching you
@@ -180,28 +188,34 @@ export interface EnemyTypeDef {
 
 export const ENEMY_TYPES: Record<EnemyKindId, EnemyTypeDef> = {
   [EnemyKind.Drifter]: {
-    name: 'Drifter', radius: 0.19, hp: 100, speed: 1, tint: 0xe8f6f8,
+    name: 'Bobber', radius: 0.19, hp: 72, speed: 1, tint: 0xff6b57,
+    accent: 0xf7f9fc, stripes: 6,
     attack: 3, attackInterval: 2.0, ranged: false, score: 10,
   },
   [EnemyKind.Scurrier]: {
-    name: 'Scurrier', radius: 0.12, hp: 45, speed: 2.05, tint: 0xffe07a,
+    name: 'Squirt', radius: 0.12, hp: 34, speed: 2.05, tint: 0x53c8ec,
+    accent: 0x2a9dc9,
     attack: 2, attackInterval: 1.5, ranged: false, score: 15,
   },
   [EnemyKind.Lobber]: {
-    name: 'Lobber', radius: 0.22, hp: 130, speed: 0.72, tint: 0xb9a8ff,
+    name: 'Slinger', radius: 0.22, hp: 110, speed: 0.72, tint: 0xb9a8ff,
+    accent: 0x7c66d9,
     attack: 5, attackInterval: 3.0, ranged: true, score: 25,
   },
   [EnemyKind.Brute]: {
-    name: 'Brute', radius: 0.36, hp: 420, speed: 0.5, tint: 0x8fd6a8,
+    name: 'Big Duck', radius: 0.36, hp: 300, speed: 0.5, tint: 0xffd23f,
+    accent: 0xff8a2a,
     attack: 9, attackInterval: 2.2, ranged: false, score: 50,
   },
   [EnemyKind.Splitter]: {
-    name: 'Splitter', radius: 0.26, hp: 170, speed: 0.85, tint: 0xffa9c9,
+    name: 'Foamer', radius: 0.26, hp: 120, speed: 0.85, tint: 0xdff3f8,
+    accent: 0xaeddec,
     attack: 4, attackInterval: 2.0, ranged: false,
     splitInto: EnemyKind.Scurrier, splitCount: 4, score: 30,
   },
   [EnemyKind.Boss]: {
-    name: 'BIG ONE', radius: 0.75, hp: 6000, speed: 0.34, tint: 0xff8f6b,
+    name: 'THE BIG ONE', radius: 0.75, hp: 3600, speed: 0.34, tint: 0xffb03f,
+    accent: 0xe0312e,
     attack: 12, attackInterval: 2.0, ranged: true, score: 500,
   },
 };

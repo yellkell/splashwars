@@ -2,8 +2,9 @@
 
 Wave-survival paint fighting in WebXR passthrough. A sleek white-and-red
 sports water pistol riding each hip, a pool-deck platform under your feet,
-and squads of glossy toy enemies bobbing in across your real room. Squeeze
-your grip near a holster to **draw**, then pull the trigger — it fires on
+and squads of runaway pool toys bobbing in across your real room —
+striped beach balls, squirt droplets, knotted water balloons, inflatable
+ducks. Squeeze your grip near a holster to **draw**, then pull the trigger — it fires on
 that very frame, no charge-up, no spin-up. It's analog, so a light squeeze
 lobs lazily and a full pull volleys, and fat cricket-ball orbs of
 bubblegum-magenta paint arc out and land with a wet plop — on the floor
@@ -53,28 +54,40 @@ no models, no textures, no sounds shipped.
 - **Damage numbers** — white digits with thick black outlines popping off
   every hit (bigger and gold for blasts), drawn from one instanced digit
   atlas so hundreds of hit markers cost a single draw call.
-- **A swarm built for thousands** — every enemy is one instance of a single
-  InstancedMesh. Eyes and paint coverage are drawn *procedurally in the
-  fragment shader* per instance, so a thousand individually half-painted
-  toys still cost one draw call and no extra geometry. A uniform spatial
-  grid keeps ball-vs-enemy and blast queries near-constant instead of
+- **Gloss everywhere** — paint is WET: Blinn-Phong glints on the tank
+  liquid and on enemy coverage, near-zero-roughness clearcoat on balls and
+  orbiter globes, lit low-roughness floor splats that catch the scene's
+  lights, and a baked wet highlight in every splat and card splash.
+- **A swarm built for thousands** — one InstancedMesh per enemy kind, all
+  sharing a single shader; paint coverage is per-instance (noise-masked,
+  dripping top-down, with a hot wet glint), so a thousand individually
+  half-painted toys still cost six draw calls. A uniform spatial grid keeps
+  ball-vs-enemy and blast queries near-constant instead of
   O(balls x enemies).
-- **Six enemy types** — Drifters (slow crowd), Scurriers (fast swarm),
-  Lobbers (throw paint from range), Brutes (big and tanky), Splitters
-  (burst into Scurriers), and the wave-10 Boss. They deal real damage at
-  the deck rim, with an invulnerability window so a crowd is pressure
-  rather than instant death. **Everything comes from the front 180°** and
-  is held there — nothing spawns or paces around behind you, because in a
-  headset you can't watch your back.
+- **The pool-toy roster** — the creative direction: everything that
+  attacks you escaped from a pool inflatables crate, each a silhouette you
+  read across the room. **Bobbers** (striped beach balls, the crowd),
+  **Squirts** (water droplets, fast, one-hit pops), **Slingers** (knotted
+  water balloons lobbing paint from range), **Big Ducks** (inflatable pool
+  ducks, the tanks), **Foamers** (bubble clumps that burst into Squirts),
+  and **THE BIG ONE** (a wave-10 crowned colossus duck). Bodies are merged
+  primitives with a per-vertex colour-role attribute (body/accent/eyes), so
+  the whole roster is six draw calls at any crowd size. They deal real
+  damage at the deck rim, with an invulnerability window so a crowd is
+  pressure rather than instant death. **Everything comes from the front
+  180°** and is held there — nothing spawns or paces around behind you.
 - **Health without a HUD** — damage throws paint across your **visor**; it
   thickens as you weaken and washes off as you recover. Same philosophy as
   the ammo: read the paint, not a number.
-- **Upgrades you pick by shooting** — between every wave three plastic
-  cards swing up and you **hose the one you want** (no menus, no laser
-  pointers) — about three balls, well under a second. Heavy Paint (damage),
-  Orbiters (vampire-survivors globes that grind anything they touch),
-  Buoyancy (max health + full heal), Paint Bomb (thrown pistols detonate),
-  Splash (balls burst with AOE) — all stacking.
+- **Menus you shoot** — the game has exactly one interaction verb. The
+  title screen is a HOW TO PLAY plate over a big START card: draw and shoot
+  it to begin. Death brings a WIPED OUT plate (wave / pops / score) with
+  AGAIN and MENU cards. Between waves, three upgrade cards swing up and you
+  **hose the one you want** — about three balls, well under a second. Heavy
+  Paint (damage), Orbiters (vampire-survivors globes that grind anything
+  they touch), Buoyancy (max health + full heal), Paint Bomb (thrown
+  pistols detonate), Splash (balls burst with AOE) — all stacking. All of
+  it is one shared shoot-to-pick CardBoard primitive (ui/cardBoard.ts).
 - **Synth SFX** — squirt loops, splats, glugs, empty clicks, enemy lobs,
   paint-bomb whumps, wave horns, upgrade chimes.
 
@@ -119,14 +132,18 @@ src/
   game/run.ts             run state: health, upgrade stacks, score
   arena/                  static set-dressing: deck, lighting, title banner
   components/             ECS data: WaterPistol
+  game/appState.ts        title -> playing -> gameover flow
+  ui/cardBoard.ts         the ONE menu primitive: shoot-to-pick cards
   systems/                WeaponSystem (draw/fire/drain/throw/slosh),
                           PaintSystem (ball flight, hits, splash, splats),
                           EnemySystem (waves, AI, threat, deaths, blasts),
-                          UpgradeSystem (the shoot-to-pick card board),
+                          UpgradeSystem (between-wave offers),
+                          MenuSystem (title + game-over boards),
                           PlayerSystem (health, visor, orbiters, death)
   weapons/waterPistol.ts  the procedural pistol build (primitives only)
   materials/              plastic PBR helpers + the clipped-liquid shader
-  enemies/swarm.ts        the instanced swarm + spatial grid + eye shader
+  enemies/geometry.ts     the pool-toy bodies (merged primitives + roles)
+  enemies/swarm.ts        per-kind instanced swarm + spatial grid + shader
   fx/paint.ts             instanced ball/splat/droplet pools
   fx/damageNumbers.ts     instanced digit-atlas hit markers
   combat/paintBus.ts      weapon -> paint-sim -> swarm event queues

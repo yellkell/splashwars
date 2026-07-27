@@ -3,18 +3,19 @@
  * upgrade board.
  *
  * Enemies are NOT ECS entities. They live in the Swarm's typed arrays and
- * render as one InstancedMesh (see enemies/swarm.ts), because the late waves
- * put hundreds of them on the deck at once. This system is the only thing
- * that writes swarm state, so all the AOE requests from elsewhere (splash,
- * paint bombs, orbiters) come in over the paint bus and are applied here.
+ * render as six per-kind InstancedMeshes (see enemies/swarm.ts and the
+ * pool-toy roster in enemies/geometry.ts), because the late waves put
+ * hundreds of them on the deck at once. This system is the only thing that
+ * writes swarm state, so all the AOE requests from elsewhere (splash, paint
+ * bombs, orbiters) come in over the paint bus and are applied here.
  *
  * Behaviour by type:
- *  - melee kinds close on you, crowd-separate off each other, and chew on
- *    your health once they reach the deck rim;
- *  - Lobbers hold at range and throw the same slow, dodgeable paint balls
+ *  - melee toys (Bobbers, Squirts, Big Ducks, Foamers) close on you,
+ *    crowd-separate, and chew on your health at the deck rim;
+ *  - Slingers hold at range and throw the same slow, dodgeable paint balls
  *    you use, so incoming fire is readable;
- *  - Splitters burst into a spray of Scurriers when killed;
- *  - the Boss is a wave-10 Lobber the size of a car.
+ *  - Foamers burst into a spray of Squirts when killed;
+ *  - THE BIG ONE is a wave-10 crowned duck the size of a car.
  */
 
 import { createSystem, Vector3 } from '@iwsdk/core';
@@ -24,6 +25,7 @@ import { dropletBurst, initPaintPools } from '../fx/paint.js';
 import { initDamageNumbers, popDamage } from '../fx/damageNumbers.js';
 import { enemyShot, pendingBlasts, recycleBlast } from '../combat/paintBus.js';
 import { damagePlayer, run } from '../game/run.js';
+import { app } from '../game/appState.js';
 import * as sfx from '../audio/sfx.js';
 import {
   ENEMY,
@@ -71,15 +73,28 @@ export class EnemySystem extends createSystem({}) {
     initPaintPools(this.world.scene);
     initDamageNumbers(this.world.scene);
     this.swarm = new Swarm(PALETTE.paint, PALETTE.paintDeep);
-    this.world.scene.add(this.swarm.mesh);
+    this.world.scene.add(this.swarm.group);
     this.buildSign();
-    this.setSign('WAVE 1 INCOMING', '#1fc4c9');
+    this.setSign('SHOOT START TO PLAY', '#1fc4c9');
   }
 
   /** UpgradeSystem calls this when the player has picked their card. */
   resumeAfterUpgrade(): void {
     this.phase = 'intermission';
     this.timer = 1.2;
+  }
+
+  /** MenuSystem calls this when a run starts: clean board, wave 1 queued. */
+  startFresh(): void {
+    for (let i = 0; i < this.swarm.px.length; i++) {
+      if (this.swarm.alive[i]) this.swarm.kill(i);
+    }
+    this.toSpawn = 0;
+    this.spawnAcc = 0;
+    upgradeGate.pending = false;
+    this.phase = 'intermission';
+    this.timer = WAVES.interWaveDelay;
+    this.setSign('WAVE 1 INCOMING', '#1fc4c9');
   }
 
   /**
@@ -105,6 +120,15 @@ export class EnemySystem extends createSystem({}) {
     const swarm = this.swarm;
 
     this.world.camera.getWorldPosition(_head);
+    // The sign gently faces the player in every phase.
+    this.sign.lookAt(_head);
+
+    // Outside a run there is nothing to direct — the menus own the stage.
+    // (resetFight/startFresh have already emptied the swarm.)
+    if (app.phase !== 'playing') {
+      pendingBlasts.length = 0;
+      return;
+    }
 
     // --- Wave director. ---
     if (this.phase === 'intermission') {
@@ -143,7 +167,9 @@ export class EnemySystem extends createSystem({}) {
       const dx = -swarm.px[i];
       const dz = -swarm.pz[i];
       const dist = Math.hypot(dx, dz) || 1e-3;
-      swarm.facing[i] = Math.atan2(dx, dz) + Math.PI;
+      // Yaw so the geometry's -Z face looks at the player (rotY(θ) maps -Z
+      // onto (-sinθ, -cosθ), so θ = atan2(-dx̂, -dẑ)).
+      swarm.facing[i] = Math.atan2(-dx / dist, -dz / dist);
 
       // Ranged types stop further out; melee press right to the rim.
       const standoff = def.ranged ? 2.6 + (kind === EnemyKind.Boss ? 1.2 : 0) : WAVES.standoffRadius;
@@ -200,10 +226,12 @@ export class EnemySystem extends createSystem({}) {
         }
       }
 
-      // Bob, weighed down as it takes paint.
+      // Bob, weighed down as it takes paint. Hover height leans on the
+      // body radius just enough that big toys loom, clamped so nothing —
+      // especially the boss — ever floats away or clips the floor.
       const covered = 1 - Math.max(0, swarm.hp[i]) / swarm.maxHp[i];
       swarm.py[i] =
-        ENEMY.hoverHeight * (swarm.radius[i] / 0.19) * 0.55 + ENEMY.hoverHeight * 0.45 +
+        Math.max(ENEMY.hoverHeight * 0.7 + swarm.radius[i] * 0.3, swarm.radius[i] * 1.02) +
         Math.sin(this.time * ENEMY.bobRate + swarm.phase[i]) * ENEMY.bobAmplitude * (1 - covered * 0.6) -
         covered * 0.1;
 
@@ -221,9 +249,6 @@ export class EnemySystem extends createSystem({}) {
     }
 
     swarm.commit(this.time);
-
-    // The sign gently faces the player.
-    this.sign.lookAt(_head);
   }
 
   // --- Damage application (the swarm's only writer). ----------------------
