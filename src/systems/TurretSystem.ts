@@ -305,8 +305,8 @@ export class TurretSystem extends createSystem({}) {
     const wallCard = {
       id: 'wall',
       title: 'WALL',
-      blurb: 'Blocks their path — build the maze they must run',
-      effectLine: `${WALL.cost} DROPS`,
+      blurb: 'Blocks their path — keep planting until you cancel',
+      effectLine: `${WALL.cost} DROPS EACH`,
       footnote:
         wallCount() >= WALL.max
           ? 'ALL WALLS UP'
@@ -360,7 +360,10 @@ export class TurretSystem extends createSystem({}) {
       return;
     }
     if (id === 'wall') {
-      if (wallCount() >= WALL.max || !spendDrops(WALL.cost)) return;
+      // Walls are pay-per-PLANT: the card just opens build mode, and every
+      // planted piece charges as it lands — so you lay a whole run of wall
+      // without bouncing back through the shop. Y still cancels (free).
+      if (wallCount() >= WALL.max || bank.drops < WALL.cost) return;
       sfx.buy();
       build.placing = 'wall';
       this.wallCellKey = -1; // force a fresh validity check
@@ -459,16 +462,28 @@ export class TurretSystem extends createSystem({}) {
         sfx.denied();
         return;
       }
+      if (!spendDrops(WALL.cost)) {
+        // Broke mid-run: buzz and drop out of build mode.
+        sfx.denied();
+        build.placing = null;
+        this.hideGhost();
+        return;
+      }
       addWall(ix, iz);
       const wall = new Group();
       wall.add(new Mesh(wallShellGeo, matWhite), new Mesh(wallCapGeo, matRed));
       wall.position.copy(_spot);
       this.world.scene.add(wall);
       this.walls.push(wall);
-      build.placing = null;
-      this.hideGhost();
       sfx.placeTower();
       dropletBurst(_spot.setY(0.3), 8, 0.8);
+      this.wallCellKey = -1; // this cell just filled — revalidate under the ghost
+      // CHAIN: stay in build mode for the next piece as long as you can
+      // afford one and the cap isn't hit — lay the whole run in one go.
+      if (bank.drops >= WALL.cost && wallCount() < WALL.max) return;
+      build.placing = null;
+      this.hideGhost();
+      sfx.shopToggle(false);
       return;
     }
   }

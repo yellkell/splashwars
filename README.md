@@ -129,8 +129,10 @@ no models, no textures, no sounds shipped.
   auto-firing tripod that locks a target, slews its head onto it at a
   finite turn rate and only fires once aligned), CHILLER (250 — an icy
   field that halves the speed of everything inside its floor ring), PUMP
-  (350 — trickles juice back into the tower), and WALL (45 — the maze
-  piece; snaps to the grid, capped per run). Bottom row, permanent money
+  (350 — trickles juice back into the tower), and WALL (45 per piece —
+  the maze piece; snaps to the grid, capped per run, and CHAINS: pick the
+  card once and keep planting piece after piece, each one charged as it
+  lands, until you cancel with Y, run dry, or hit the cap). Bottom row, permanent money
   sinks that level base stats forever, each card wearing its LV badge:
   POWER (+15% ball damage per level), BIG TANKS (+3 balls in every fresh
   pistol per level), RESERVOIR (+60 tower capacity per level, filled on
