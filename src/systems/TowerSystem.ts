@@ -116,8 +116,8 @@ export class TowerSystem extends createSystem({}) {
   /**
    * THE GRID — the build board painted on the real floor, centred on the
    * tower. Cell edges match game/field.ts exactly, so a wall ghost snaps
-   * precisely onto the squares you see. Faint while you fight; it wakes up
-   * bright whenever a ghost (turret or wall) is out.
+   * precisely onto the squares you see. Invisible while you fight — it
+   * exists only while a ghost (turret or wall) is out.
    */
   private buildGrid(): void {
     const extent = (FIELD.half * 2 + 1) * FIELD.cell;
@@ -147,7 +147,7 @@ export class TowerSystem extends createSystem({}) {
           float w = fwidth(d) * 1.2;
           float line = 1.0 - smoothstep(0.0, 0.012 + w, d);
           float fade = 1.0 - smoothstep(uRadius * 0.45, uRadius * 0.95, length(vLocal));
-          float alpha = line * fade * (0.10 + 0.4 * uMix);
+          float alpha = line * fade * 0.5 * uMix;
           if (alpha < 0.004) discard;
           gl_FragColor = vec4(uColor, alpha);
         }
@@ -217,13 +217,13 @@ export class TowerSystem extends createSystem({}) {
       this.ghostRing.visible = false;
     }
 
-    // The build grid: faint underlay during the fight, bright with a ghost.
-    const showGrid = tower.placed && app.phase === 'playing';
-    this.grid.visible = showGrid;
-    if (showGrid) {
+    // The build grid: INVISIBLE during the fight — it only fades up while
+    // a ghost (turret or wall) is out, and fades away the moment it plants.
+    const target = tower.placed && app.phase === 'playing' && build.placing ? 1 : 0;
+    this.gridMix += (target - this.gridMix) * Math.min(1, delta * 8);
+    this.grid.visible = this.gridMix > 0.01;
+    if (this.grid.visible) {
       this.grid.position.set(tower.pos.x, 0.006, tower.pos.z);
-      const target = build.placing ? 1 : 0;
-      this.gridMix += (target - this.gridMix) * Math.min(1, delta * 8);
       this.gridMat.uniforms.uMix.value = this.gridMix;
     }
 

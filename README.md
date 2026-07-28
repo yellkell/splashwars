@@ -104,9 +104,9 @@ no models, no textures, no sounds shipped.
 - **The board: one portal, one grid, your maze** — planting the tower
   opens THE PORTAL 6 m past it: a violet ring with a swirling drink
   inside, and every machine in every wave pours out of that ONE door
-  (flaring as it does). A subtle aqua grid paints the real floor around
-  the tower — faint in the fight, bright while a ghost is out — and WALL
-  pieces from the shop snap to its cells. Enemies never body through a
+  (flaring as it does). An aqua grid fades onto the real floor around the
+  tower ONLY while a placement ghost is out (the fight itself stays
+  clean passthrough), and WALL pieces from the shop snap to its cells. Enemies never body through a
   wall: two flow fields (Dijkstra from tower and portal, recomputed only
   when the board changes) steer the whole swarm around your build with
   zero per-enemy pathfinding — attackers descend one field to the tower,
