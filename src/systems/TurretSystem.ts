@@ -6,8 +6,9 @@
  * always there, so the economy is always one glance away — no floating HUD.
  *
  * THE SHOP: press Y (the button on your watch wrist) any time mid-battle
- * and the shop board flips up — a 3×2 grid of the same shoot-to-pick cards
- * as everything else. Top row: turrets. Bottom row: STAT SINKS — POWER,
+ * and the shop board flips up — the same shoot-to-pick cards as everything
+ * else. Top row: turrets and the WALL piece (which snaps to the floor grid
+ * and reroutes THE THIRST — see game/field.ts). Bottom row: STAT SINKS — POWER,
  * BIG TANKS and RESERVOIR levels you can buy again and again, each level
  * pricier than the last, so late-run money always has somewhere to go and
  * every purchase is a permanent base-stat bump. A card you can't afford shakes its
@@ -31,6 +32,7 @@
 
 import { createSystem, InputComponent, Vector3 } from '@iwsdk/core';
 import {
+  BoxGeometry,
   BufferGeometry,
   CanvasTexture,
   Euler,
@@ -52,6 +54,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CardBoard } from '../ui/cardBoard.js';
 import { crispTexture, logicalCanvas } from '../ui/crispCanvas.js';
 import { placementSpot } from '../input/pointRay.js';
+import { addWall, canPlaceWall, cellCentre, cellOf, clearWalls, wallCount } from '../game/field.js';
 import { app } from '../game/appState.js';
 import { bank, build, placedTurrets, sinkCost, sinks, spendDrops } from '../game/shop.js';
 import { tower } from '../game/tower.js';
@@ -68,6 +71,7 @@ import {
   TURRET,
   TURRET_DEFS,
   TurretKind,
+  WALL,
   type TurretKindId,
 } from '../config.js';
 
@@ -113,7 +117,12 @@ let matWhite: MeshStandardMaterial;
 let matRed: MeshStandardMaterial;
 let matIce: MeshStandardMaterial;
 let matGhost: MeshBasicMaterial;
+let matGhostBad: MeshBasicMaterial;
 let auraGeo: RingGeometry;
+// The wall piece: a moulded white barrier with a red cap rail, one per cell.
+let wallShellGeo: BufferGeometry;
+let wallCapGeo: BufferGeometry;
+let wallGhostGeo: BufferGeometry;
 
 function tripodBase(): BufferGeometry[] {
   const parts: BufferGeometry[] = [];
@@ -131,8 +140,13 @@ function buildAssets(): Record<TurretKindId, TurretAssets> {
   matRed = new MeshStandardMaterial({ color: PALETTE.sportRed, roughness: 0.3, metalness: 0 });
   matIce = new MeshStandardMaterial({ color: 0x9fe8f8, roughness: 0.15, metalness: 0 });
   matGhost = new MeshBasicMaterial({ color: PALETTE.water, transparent: true, opacity: 0.4, depthWrite: false });
+  matGhostBad = new MeshBasicMaterial({ color: PALETTE.sportRed, transparent: true, opacity: 0.45, depthWrite: false });
   auraGeo = new RingGeometry(TURRET.chiller.radius - 0.05, TURRET.chiller.radius, 48);
   auraGeo.rotateX(-Math.PI / 2);
+  // Wall: slab sized a hair under the cell so neighbours read as segments.
+  wallShellGeo = bake(new BoxGeometry(0.56, WALL.height, 0.56), 0, WALL.height / 2, 0);
+  wallCapGeo = bake(new BoxGeometry(0.6, 0.055, 0.6), 0, WALL.height + 0.027, 0);
+  wallGhostGeo = mergeGeometries([wallShellGeo.clone(), wallCapGeo.clone()])!;
 
   return {
     [TurretKind.Sprinkler]: {
@@ -195,8 +209,14 @@ export class TurretSystem extends createSystem({}) {
   private lastPlacingShown: string | null = null;
   private triggerWas: [boolean, boolean] = [false, false];
   private rigs: TurretRig[] = [];
+  private walls: Group[] = [];
   private ghost?: Group;
   private ghostRing?: Mesh;
+  private wallGhost?: Mesh;
+  // Cache the last checked cell so the path test runs on cell CHANGE, not
+  // every frame (the connectivity Dijkstra is cheap, but not frame-cheap).
+  private wallCellKey = -1;
+  private wallCellOk = false;
   private time = 0;
 
   init(): void {
@@ -264,7 +284,7 @@ export class TurretSystem extends createSystem({}) {
     }
   }
 
-  // --- The shop: turrets on top, consumables below. ------------------------
+  // --- The shop: buildables on top, stat sinks below. ----------------------
 
   private showShop(): void {
     const turretCards = TURRET_DEFS.map((def) => ({
@@ -281,6 +301,19 @@ export class TurretSystem extends createSystem({}) {
       color: def.color,
       scale: 0.85,
     }));
+    // The maze piece: cheap, snaps to the grid, reroutes THE THIRST.
+    const wallCard = {
+      id: 'wall',
+      title: 'WALL',
+      blurb: 'Blocks their path — build the maze they must run',
+      effectLine: `${WALL.cost} DROPS`,
+      footnote:
+        wallCount() >= WALL.max
+          ? 'ALL WALLS UP'
+          : `${wallCount()}/${WALL.max}${bank.drops < WALL.cost ? ` · need ${WALL.cost - bank.drops} more` : ''}`,
+      color: '#8f76e8',
+      scale: 0.85,
+    };
     // Bottom row: the stat sinks — buy forever, price climbs per level.
     const sinkCards = SINK_DEFS.map((def) => {
       const level = sinks[def.id];
@@ -301,13 +334,14 @@ export class TurretSystem extends createSystem({}) {
       };
     });
 
-    this.board.show([...turretCards, ...sinkCards], {
+    this.board.show([...turretCards, wallCard, ...sinkCards], {
       y: SHOP.boardHeight,
       distance: SHOP.boardDistance,
-      perRow: 3,
+      perRow: 4,
       canPick: (id) => {
         const turret = TURRET_DEFS.find((d) => d.id === id);
         if (turret) return bank.drops >= turret.cost && placedTurrets.length < SHOP.maxTurrets;
+        if (id === 'wall') return bank.drops >= WALL.cost && wallCount() < WALL.max;
         const def = SINK_DEFS.find((d) => d.id === id)!;
         return bank.drops >= sinkCost(def.baseCost, sinks[def.id]);
       },
@@ -325,6 +359,14 @@ export class TurretSystem extends createSystem({}) {
       pulseHand(this.world.session, HANDS[SHOP.toggleHand], 0.4, 60);
       return;
     }
+    if (id === 'wall') {
+      if (wallCount() >= WALL.max || !spendDrops(WALL.cost)) return;
+      sfx.buy();
+      build.placing = 'wall';
+      this.wallCellKey = -1; // force a fresh validity check
+      pulseHand(this.world.session, HANDS[SHOP.toggleHand], 0.4, 60);
+      return;
+    }
     const def = SINK_DEFS.find((d) => d.id === id)!;
     if (!spendDrops(sinkCost(def.baseCost, sinks[def.id]))) return;
     sfx.buy();
@@ -339,7 +381,11 @@ export class TurretSystem extends createSystem({}) {
 
   // --- Placement (the same point-and-plant ritual as the tower). -----------
 
-  private updatePlacing(kind: TurretKindId): void {
+  private updatePlacing(kind: TurretKindId | 'wall'): void {
+    if (kind === 'wall') {
+      this.updateWallPlacing();
+      return;
+    }
     if (!this.ghost) {
       this.ghost = this.buildTurretMesh(kind, true);
       this.ghostRing = new Mesh(
@@ -381,11 +427,74 @@ export class TurretSystem extends createSystem({}) {
     dropletBurst(_spot.copy(at).setY(0.3), 10, 0.9);
   }
 
+  /**
+   * The wall ghost: snaps to the grid cell under your point, aqua when the
+   * spot is legal, RED when it isn't — occupied, hugging the tower or the
+   * portal mouth, or (the important one) it would seal the only path.
+   * The connectivity test reruns only when the pointed-at cell changes.
+   */
+  private updateWallPlacing(): void {
+    if (!this.wallGhost) {
+      this.wallGhost = new Mesh(wallGhostGeo, matGhost);
+      this.world.scene.add(this.wallGhost);
+    }
+    placementSpot(this.world, _spot);
+    const { ix, iz } = cellOf(_spot.x, _spot.z);
+    const key = ix * 4096 + iz;
+    if (key !== this.wallCellKey) {
+      this.wallCellKey = key;
+      this.wallCellOk = canPlaceWall(ix, iz);
+    }
+    cellCentre(ix, iz, _spot);
+    this.wallGhost.position.copy(_spot);
+    this.wallGhost.material = this.wallCellOk ? matGhost : matGhostBad;
+
+    for (const hand of [0, 1] as const) {
+      const gp = this.input.xr.gamepads[HANDS[hand]];
+      const pressed = gp?.getButtonPressed(InputComponent.Trigger) ?? false;
+      const down = pressed && !this.triggerWas[hand];
+      this.triggerWas[hand] = pressed;
+      if (!down) continue;
+      if (!this.wallCellOk) {
+        sfx.denied();
+        return;
+      }
+      addWall(ix, iz);
+      const wall = new Group();
+      wall.add(new Mesh(wallShellGeo, matWhite), new Mesh(wallCapGeo, matRed));
+      wall.position.copy(_spot);
+      this.world.scene.add(wall);
+      this.walls.push(wall);
+      build.placing = null;
+      this.hideGhost();
+      sfx.placeTower();
+      dropletBurst(_spot.setY(0.3), 8, 0.8);
+      return;
+    }
+  }
+
+  /** Dev-hook entry: snap a wall onto the cell under (x,z) if legal. */
+  placeWallAt(x: number, z: number): boolean {
+    const { ix, iz } = cellOf(x, z);
+    if (!canPlaceWall(ix, iz)) return false;
+    addWall(ix, iz);
+    const wall = new Group();
+    wall.add(new Mesh(wallShellGeo, matWhite), new Mesh(wallCapGeo, matRed));
+    cellCentre(ix, iz, _spot);
+    wall.position.copy(_spot);
+    this.world.scene.add(wall);
+    this.walls.push(wall);
+    return true;
+  }
+
   private hideGhost(): void {
     this.ghost?.removeFromParent();
     this.ghost = undefined;
     this.ghostRing?.removeFromParent();
     this.ghostRing = undefined;
+    this.wallGhost?.removeFromParent();
+    this.wallGhost = undefined;
+    this.wallCellKey = -1;
   }
 
   /** Wipe every standing turret (new run). */
@@ -400,6 +509,9 @@ export class TurretSystem extends createSystem({}) {
     for (const rig of this.rigs) rig.group.removeFromParent();
     this.rigs.length = 0;
     placedTurrets.length = 0;
+    for (const wall of this.walls) wall.removeFromParent();
+    this.walls.length = 0;
+    clearWalls();
   }
 
   // --- Turret bodies, assembled from the shared cached assets. -------------

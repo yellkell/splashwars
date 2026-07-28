@@ -99,6 +99,11 @@ export class WeaponSystem extends createSystem({
   private motion: [HandMotion, HandMotion] = [new HandMotion(), new HandMotion()];
   private throws: [ThrowState, ThrowState] = [new ThrowState(), new ThrowState()];
   private squeezeWas: [boolean, boolean] = [false, false];
+  /** This frame's squeeze edges, sampled once for BOTH hands up front —
+   * the catch check needs the hand a pistol does NOT belong to. */
+  private squeezeDownNow: [boolean, boolean] = [false, false];
+  /** Which physical hands are holding a pistol this frame. */
+  private heldNow: [boolean, boolean] = [false, false];
   /** Trigger edge tracker, so a pull fires on the very same frame. */
   private firingWas: [boolean, boolean] = [false, false];
   private squirting: [boolean, boolean] = [false, false];
@@ -119,6 +124,21 @@ export class WeaponSystem extends createSystem({
   update(delta: number): void {
     this.time += delta;
 
+    // Sample both hands once: squeeze edges and who's holding what. The
+    // catch check below wants the OTHER hand's state too.
+    for (const h of [0, 1] as const) {
+      const hgp = this.input.xr.gamepads[HANDS[h]];
+      const sq = hgp?.getButtonPressed(InputComponent.Squeeze) ?? false;
+      this.squeezeDownNow[h] = sq && !this.squeezeWas[h];
+      this.squeezeWas[h] = sq;
+      this.heldNow[h] = false;
+    }
+    for (const e of this.queries.pistols.entities) {
+      if ((e.getValue(WaterPistol, 'state') ?? 0) === PistolState.Held) {
+        this.heldNow[(e.getValue(WaterPistol, 'hand') ?? 0) as Hand] = true;
+      }
+    }
+
     for (const e of this.queries.pistols.entities) {
       const rig = this.rigs.get(e);
       if (!rig) continue;
@@ -132,9 +152,8 @@ export class WeaponSystem extends createSystem({
 
       const grip = this.world.playerSpaceEntities.gripSpaces[HANDS[hand]]?.object3D;
       const gp = this.input.xr.gamepads[HANDS[hand]];
-      const squeezing = gp?.getButtonPressed(InputComponent.Squeeze) ?? false;
-      const squeezeDown = squeezing && !this.squeezeWas[hand];
-      this.squeezeWas[hand] = squeezing;
+      const squeezing = this.squeezeWas[hand];
+      const squeezeDown = this.squeezeDownNow[hand];
 
       switch (state) {
         case PistolState.Holstered: {
@@ -171,22 +190,30 @@ export class WeaponSystem extends createSystem({
           rig.group.position.addScaledVector(t.vel, delta);
           rig.group.rotateOnAxis(t.spinAxis, t.spin * delta);
 
-          // THE CATCH: squeeze the grip with the gun's own hand while it's
-          // in reach and it snaps back into your palm, ammo intact — throw
-          // it out, snatch it back, juggle it. Pure style, zero cost.
-          if (squeezeDown && grip) {
-            grip.getWorldPosition(_gripPos);
-            if (_gripPos.distanceTo(rig.group.position) <= HOLSTER.catchRadius) {
-              grip.add(rig.group);
-              rig.group.position.set(0, 0, 0);
-              rig.group.quaternion.setFromAxisAngle(_e.set(1, 0, 0), HOLSTER.heldPitch);
-              e.setValue(WaterPistol, 'state', PistolState.Held);
-              sfx.draw();
-              pulseHand(this.world.session, HANDS[hand], 0.7, 70);
-              break;
-            }
+          // THE CATCH: squeeze any EMPTY hand near a flying gun and it
+          // snaps into that palm, ammo intact — snatch your own throw back
+          // OR toss a pistol across your body to the other hand. On a
+          // cross-catch the two guns trade owners (the spare shifts hips),
+          // so each side always has exactly one.
+          let caught = false;
+          for (const h2 of [0, 1] as const) {
+            if (!this.squeezeDownNow[h2] || this.heldNow[h2]) continue;
+            const grip2 = this.world.playerSpaceEntities.gripSpaces[HANDS[h2]]?.object3D;
+            if (!grip2) continue;
+            grip2.getWorldPosition(_gripPos);
+            if (_gripPos.distanceTo(rig.group.position) > HOLSTER.catchRadius) continue;
+            if (h2 !== hand) this.swapHands(e, hand, h2);
+            grip2.add(rig.group);
+            rig.group.position.set(0, 0, 0);
+            rig.group.quaternion.setFromAxisAngle(_e.set(1, 0, 0), HOLSTER.heldPitch);
+            e.setValue(WaterPistol, 'state', PistolState.Held);
+            this.heldNow[h2] = true;
+            sfx.draw();
+            pulseHand(this.world.session, HANDS[h2], 0.7, 70);
+            caught = true;
+            break;
           }
-          this.checkThrowImpact(e, rig);
+          if (!caught) this.checkThrowImpact(e, rig);
           break;
         }
 
@@ -287,6 +314,29 @@ export class WeaponSystem extends createSystem({
     if (!(firing && autoStacks > 0 && ammo > 0)) this.stopSquirt(hand);
 
     e.setValue(WaterPistol, 'ammo', ammo);
+  }
+
+  /**
+   * A cross-catch trades the two pistols' owners: the caught gun joins the
+   * catching hand, and the spare (holstered, flying or respawning — never
+   * held, or the hand couldn't catch) is re-tagged to the vacated hand, so
+   * its next holster pose lands on that hip. The per-hand flight/motion
+   * trackers swap with them so a still-flying spare keeps its trajectory.
+   */
+  private swapHands(flying: Entity, from: Hand, to: Hand): void {
+    for (const other of this.queries.pistols.entities) {
+      if (other === flying) continue;
+      if (((other.getValue(WaterPistol, 'hand') ?? 0) as Hand) !== to) continue;
+      other.setValue(WaterPistol, 'hand', from);
+      break;
+    }
+    flying.setValue(WaterPistol, 'hand', to);
+    const t = this.throws[from];
+    this.throws[from] = this.throws[to];
+    this.throws[to] = t;
+    const m = this.motion[from];
+    this.motion[from] = this.motion[to];
+    this.motion[to] = m;
   }
 
   // --- Throw / impact / respawn. ------------------------------------------

@@ -17,11 +17,14 @@
 import { createSystem, InputComponent, Vector3 } from '@iwsdk/core';
 import { placementSpot } from '../input/pointRay.js';
 import {
+  Color,
   Group,
   Mesh,
   MeshBasicMaterial,
   Object3D,
+  PlaneGeometry,
   RingGeometry,
+  ShaderMaterial,
   BoxGeometry,
   ConeGeometry,
   CylinderGeometry,
@@ -32,7 +35,9 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { clearPlastic, glossyPlastic } from '../materials/plastic.js';
 import { createLiquid, type LiquidVisual } from '../materials/liquid.js';
 import { app } from '../game/appState.js';
+import { build } from '../game/shop.js';
 import { resetTower, tower } from '../game/tower.js';
+import { FIELD } from '../config.js';
 import { run } from '../game/run.js';
 import { EnemySystem } from './EnemySystem.js';
 import { dropletBurst, stampSplat } from '../fx/juice.js';
@@ -69,6 +74,9 @@ function towerGeometry(): BufferGeometry {
 export class TowerSystem extends createSystem({}) {
   private ghost!: Mesh;
   private ghostRing!: Mesh;
+  private grid!: Mesh;
+  private gridMat!: ShaderMaterial;
+  private gridMix = 0;
   private real!: Group;
   private liquid!: LiquidVisual;
   private tankMarker!: Object3D;
@@ -102,6 +110,55 @@ export class TowerSystem extends createSystem({}) {
     this.real = this.buildTower();
     this.real.visible = false;
     this.world.scene.add(this.real);
+    this.buildGrid();
+  }
+
+  /**
+   * THE GRID — the build board painted on the real floor, centred on the
+   * tower. Cell edges match game/field.ts exactly, so a wall ghost snaps
+   * precisely onto the squares you see. Faint while you fight; it wakes up
+   * bright whenever a ghost (turret or wall) is out.
+   */
+  private buildGrid(): void {
+    const extent = (FIELD.half * 2 + 1) * FIELD.cell;
+    const geo = new PlaneGeometry(extent, extent);
+    geo.rotateX(-Math.PI / 2);
+    this.gridMat = new ShaderMaterial({
+      uniforms: {
+        uMix: { value: 0 },
+        uCell: { value: FIELD.cell },
+        uColor: { value: new Color(PALETTE.water) },
+        uRadius: { value: extent / 2 },
+      },
+      vertexShader: /* glsl */ `
+        varying vec2 vLocal;
+        void main() {
+          vLocal = position.xz;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform float uMix; uniform float uCell; uniform vec3 uColor; uniform float uRadius;
+        varying vec2 vLocal;
+        void main() {
+          // Metres to the nearest cell EDGE (edges sit at half-cell offsets).
+          vec2 g = abs(fract(vLocal / uCell) - 0.5) * uCell;
+          float d = min(g.x, g.y);
+          float w = fwidth(d) * 1.2;
+          float line = 1.0 - smoothstep(0.0, 0.012 + w, d);
+          float fade = 1.0 - smoothstep(uRadius * 0.45, uRadius * 0.95, length(vLocal));
+          float alpha = line * fade * (0.10 + 0.4 * uMix);
+          if (alpha < 0.004) discard;
+          gl_FragColor = vec4(uColor, alpha);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+    });
+    this.grid = new Mesh(geo, this.gridMat);
+    this.grid.position.y = 0.006;
+    this.grid.visible = false;
+    this.world.scene.add(this.grid);
   }
 
   /** The real thing: legs, deck, frosted reservoir with LIVE juice inside. */
@@ -158,6 +215,16 @@ export class TowerSystem extends createSystem({}) {
     } else {
       this.ghost.visible = false;
       this.ghostRing.visible = false;
+    }
+
+    // The build grid: faint underlay during the fight, bright with a ghost.
+    const showGrid = tower.placed && app.phase === 'playing';
+    this.grid.visible = showGrid;
+    if (showGrid) {
+      this.grid.position.set(tower.pos.x, 0.006, tower.pos.z);
+      const target = build.placing ? 1 : 0;
+      this.gridMix += (target - this.gridMix) * Math.min(1, delta * 8);
+      this.gridMat.uniforms.uMix.value = this.gridMix;
     }
 
     this.real.visible = tower.placed && (app.phase === 'playing' || app.phase === 'gameover');

@@ -21,8 +21,19 @@
  */
 
 import { createSystem, Vector3 } from '@iwsdk/core';
-import { CanvasTexture, Mesh, MeshBasicMaterial, PlaneGeometry } from 'three';
+import {
+  CanvasTexture,
+  CircleGeometry,
+  DoubleSide,
+  Group,
+  Mesh,
+  MeshBasicMaterial,
+  PlaneGeometry,
+  ShaderMaterial,
+  TorusGeometry,
+} from 'three';
 import { crispTexture, logicalCanvas } from '../ui/crispCanvas.js';
+import { fleeAt, flowAt, portal, setupField, wallAt } from '../game/field.js';
 import { Swarm } from '../enemies/swarm.js';
 import { dropletBurst, initJuicePools, wipeFloor } from '../fx/juice.js';
 import { initDamageNumbers, popDamage } from '../fx/damageNumbers.js';
@@ -45,6 +56,7 @@ import {
   ENEMY_TYPES,
   EnemyKind,
   PALETTE,
+  PORTAL,
   TOWER,
   TURRET,
   TurretKind,
@@ -56,17 +68,8 @@ import {
 const _pos = new Vector3();
 const _head = new Vector3();
 const _shotVel = new Vector3();
+const _flow = new Vector3();
 const _near: number[] = [];
-
-/**
- * A random spawn bearing across the FRONT arc only. Angles are measured so
- * that -PI/2 is straight ahead (-Z); WAVES.spawnArc opens symmetrically
- * around it. Nothing ever spawns behind you — in a headset you cannot watch
- * your back, so a rear spawn is damage you never had a chance to answer.
- */
-function frontAngle(): number {
-  return -Math.PI / 2 + (Math.random() - 0.5) * WAVES.spawnArc;
-}
 
 type Phase = 'intermission' | 'wave' | 'upgrade';
 
@@ -85,13 +88,66 @@ export class EnemySystem extends createSystem({}) {
   private signCanvas!: HTMLCanvasElement;
   private signTex!: CanvasTexture;
 
+  // THE PORTAL — the one door THE THIRST comes through.
+  private portalGroup!: Group;
+  private portalSwirl!: ShaderMaterial;
+  private portalPulse = 0;
+
   init(): void {
     initJuicePools(this.world.scene);
     initDamageNumbers(this.world.scene);
     this.swarm = new Swarm(PALETTE.juice, PALETTE.juiceDeep);
     this.world.scene.add(this.swarm.group);
     this.buildSign();
+    this.buildPortal();
     this.setSign('SHOOT START TO PLAY', '#1fc4c9');
+  }
+
+  /** The rival team's door: a violet ring with a swirling drink inside. */
+  private buildPortal(): void {
+    this.portalGroup = new Group();
+    const ring = new Mesh(
+      new TorusGeometry(PORTAL.radius, 0.06, 12, 40),
+      new MeshBasicMaterial({ color: 0x7b5cff }),
+    );
+    this.portalGroup.add(ring);
+    const rim = new Mesh(
+      new TorusGeometry(PORTAL.radius + 0.07, 0.02, 8, 40),
+      new MeshBasicMaterial({ color: 0xcdbcff }),
+    );
+    this.portalGroup.add(rim);
+    this.portalSwirl = new ShaderMaterial({
+      uniforms: { uTime: { value: 0 }, uPulse: { value: 0 } },
+      vertexShader: /* glsl */ `
+        varying vec2 vUv;
+        void main(){ vUv = uv * 2.0 - 1.0;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform float uTime; uniform float uPulse;
+        varying vec2 vUv;
+        void main(){
+          float r = length(vUv);
+          if (r > 1.0) discard;
+          float a = atan(vUv.y, vUv.x);
+          // Spiral bands winding INWARD — the drink going down the drain.
+          float swirl = 0.5 + 0.5 * sin(a * 3.0 + r * 14.0 - uTime * 3.4);
+          swirl *= swirl;
+          vec3 deep = vec3(0.09, 0.05, 0.22);
+          vec3 glow = vec3(0.55, 0.42, 1.0);
+          vec3 col = mix(deep, glow, swirl * (0.35 + 0.65 * r) + uPulse * 0.5);
+          float alpha = smoothstep(1.0, 0.86, r) * (0.82 + uPulse * 0.18);
+          gl_FragColor = vec4(col, alpha);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      side: DoubleSide,
+    });
+    const disc = new Mesh(new CircleGeometry(PORTAL.radius * 0.94, 40), this.portalSwirl);
+    this.portalGroup.add(disc);
+    this.portalGroup.visible = false;
+    this.world.scene.add(this.portalGroup);
   }
 
   /** UpgradeSystem calls this when the player has picked their card. */
@@ -102,6 +158,10 @@ export class EnemySystem extends createSystem({}) {
 
   /** MenuSystem calls this when a run starts: clean board, wave 1 queued. */
   startFresh(): void {
+    // Plant the board: grid centred on the tower, portal opened past it
+    // along the line you stood on, both flow fields computed.
+    this.world.camera.getWorldPosition(_head);
+    setupField(tower.pos, _head);
     wipeFloor(tower.pos); // last run's juice sweeps away as the new one starts
     for (let i = 0; i < this.swarm.px.length; i++) {
       if (this.swarm.alive[i]) this.swarm.kill(i);
@@ -140,6 +200,19 @@ export class EnemySystem extends createSystem({}) {
     this.world.camera.getWorldPosition(_head);
     // The sign gently faces the player in every phase.
     this.sign.lookAt(_head);
+
+    // The portal stands past the tower, facing it, drink swirling.
+    const showPortal = tower.placed && (app.phase === 'playing' || app.phase === 'gameover');
+    this.portalGroup.visible = showPortal;
+    if (showPortal) {
+      this.portalGroup.position.copy(portal);
+      this.portalGroup.lookAt(tower.pos.x, portal.y, tower.pos.z);
+      this.portalPulse = Math.max(0, this.portalPulse - delta * 2.2);
+      this.portalSwirl.uniforms.uTime.value = this.time;
+      this.portalSwirl.uniforms.uPulse.value = this.portalPulse;
+      const s = 1 + this.portalPulse * 0.12 + Math.sin(this.time * 1.8) * 0.02;
+      this.portalGroup.scale.setScalar(s);
+    }
 
     // Outside a run there is nothing to direct — the menus own the stage.
     // (resetFight/startFresh have already emptied the swarm.)
@@ -189,14 +262,35 @@ export class EnemySystem extends createSystem({}) {
       }
 
       const fleeing = swarm.fleeing[i] === 1;
+      const boss = kind === EnemyKind.Boss;
       const dx = tx - swarm.px[i];
       const dz = tz - swarm.pz[i];
       const dist = Math.hypot(dx, dz) || 1e-3;
-      // Yaw so the machine faces where it's going: at the tower normally,
-      // AWAY from it when fleeing with stolen juice.
-      swarm.facing[i] = fleeing
-        ? Math.atan2(dx / dist, dz / dist)
-        : Math.atan2(-dx / dist, -dz / dist);
+
+      // Which way is this machine trying to go? Attackers descend the
+      // FLOW FIELD toward the tower — which is what routes the whole
+      // swarm around your walls with zero per-enemy pathfinding. Fleeing
+      // Sippers descend the FLEE field back to the portal they came from.
+      // THE GULP is too big for the maze: it plows the straight line.
+      let mx: number;
+      let mz: number;
+      if (fleeing) {
+        if (!boss && fleeAt(swarm.px[i], swarm.pz[i], _flow)) {
+          mx = _flow.x;
+          mz = _flow.z;
+        } else {
+          mx = -dx / dist;
+          mz = -dz / dist;
+        }
+      } else if (!boss && flowAt(swarm.px[i], swarm.pz[i], _flow)) {
+        mx = _flow.x;
+        mz = _flow.z;
+      } else {
+        mx = dx / dist;
+        mz = dz / dist;
+      }
+      // Yaw so the machine faces where it's actually going.
+      swarm.facing[i] = Math.atan2(-mx, -mz);
 
       // Ranged types stop further out; melee press right up to the tower.
       const standoff = def.ranged
@@ -243,23 +337,27 @@ export class EnemySystem extends createSystem({}) {
       // stop entirely during the arrival swoop.
       if (swarm.attackAnim[i] > 0 || swarm.arrive[i] > 0) speed = 0;
 
+      const ox = swarm.px[i];
+      const oz = swarm.pz[i];
       if (fleeing) {
-        // Run for the exit with the goods. Kill it to get the juice back.
-        const flee = speed > 0 ? speed * ENEMY.fleeSpeedMult : 0;
-        swarm.px[i] -= (dx / dist) * flee * delta;
-        swarm.pz[i] -= (dz / dist) * flee * delta;
-        if (dist > ENEMY.escapeRadius) {
-          // Escaped: the juice is gone for good. No refunds.
+        // Run the maze back to the portal with the goods.
+        const flee = speed * ENEMY.fleeSpeedMult;
+        swarm.px[i] += mx * flee * delta;
+        swarm.pz[i] += mz * flee * delta;
+        // Through the door (or off the board): the juice is gone for good.
+        const pdx = swarm.px[i] - portal.x;
+        const pdz = swarm.pz[i] - portal.z;
+        if (pdx * pdx + pdz * pdz < 0.36 || dist > ENEMY.escapeRadius) {
           swarm.kill(i);
           continue;
         }
       } else if (dist > standoff) {
-        swarm.px[i] += (dx / dist) * speed * delta;
-        swarm.pz[i] += (dz / dist) * speed * delta;
+        swarm.px[i] += mx * speed * delta;
+        swarm.pz[i] += mz * speed * delta;
         if (lateral !== 0) {
-          // Perpendicular sway (left of the approach direction).
-          swarm.px[i] += (-dz / dist) * lateral * speed * delta;
-          swarm.pz[i] += (dx / dist) * lateral * speed * delta;
+          // Perpendicular sway (left of the travel direction).
+          swarm.px[i] += -mz * lateral * speed * delta;
+          swarm.pz[i] += mx * lateral * speed * delta;
         }
       }
 
@@ -284,27 +382,16 @@ export class EnemySystem extends createSystem({}) {
         }
       }
 
-      // --- Hard containment in the FRONT arc (measured from the tower). ---
-      // Spawning in front is not enough on its own: weaving and crowd
-      // shoving would both walk enemies around behind you over time — the
-      // thing that makes a headset fight feel unfair. Clamp every enemy
-      // back inside the arc each frame.
-      {
-        const rx = swarm.px[i] - tx;
-        const rz = swarm.pz[i] - tz;
-        const r = Math.hypot(rx, rz);
-        if (r > 1e-3) {
-          const centre = -Math.PI / 2;
-          const half = WAVES.spawnArc / 2;
-          let d = Math.atan2(rz, rx) - centre;
-          while (d > Math.PI) d -= Math.PI * 2;
-          while (d < -Math.PI) d += Math.PI * 2;
-          if (Math.abs(d) > half) {
-            const edge = centre + Math.sign(d) * half;
-            swarm.px[i] = tx + Math.cos(edge) * r;
-            swarm.pz[i] = tz + Math.sin(edge) * r;
-            swarm.strafeDir[i] = -swarm.strafeDir[i] as -1 | 1;
-          }
+      // --- Walls are SOLID to the swarm: slide along them, never through.
+      // The flow field already routes around walls; this catches lateral
+      // sway and crowd shoving nudging someone into a cell edge. The boss
+      // is exempt — it's too big for the maze and plows straight through.
+      if (!boss && wallAt(swarm.px[i], swarm.pz[i])) {
+        if (!wallAt(ox, swarm.pz[i])) swarm.px[i] = ox;
+        else if (!wallAt(swarm.px[i], oz)) swarm.pz[i] = oz;
+        else {
+          swarm.px[i] = ox;
+          swarm.pz[i] = oz;
         }
       }
 
@@ -504,34 +591,30 @@ export class EnemySystem extends createSystem({}) {
     const speedScale = 1 + (wave - 1) * (WAVES.speedPerWave / WAVES.baseSpeed) * 0.25;
     const boss = kind === EnemyKind.Boss;
 
-    const [rMin, rMax] = WAVES.spawnRadius;
-    const r = rMin + Math.random() * (rMax - rMin);
-    const a = frontAngle();
-    this.swarm.spawn(
-      kind,
-      tower.pos.x + Math.cos(a) * r,
-      ENEMY.hoverHeight,
-      tower.pos.z + Math.sin(a) * r,
-      hpScale,
-      speedScale,
-      boss ? WAVES.bossScale : 1,
-    );
+    this.spawnAtPortal(kind, hpScale, speedScale, boss ? WAVES.bossScale : 1);
 
     // The boss never comes alone.
     if (boss) {
       for (let n = 0; n < 12; n++) {
-        const aa = frontAngle();
-        const rr = rMin + Math.random() * (rMax - rMin);
-        this.swarm.spawn(
-          EnemyKind.Scurrier,
-          tower.pos.x + Math.cos(aa) * rr,
-          ENEMY.hoverHeight,
-          tower.pos.z + Math.sin(aa) * rr,
-          hpScale,
-          speedScale,
-        );
+        this.spawnAtPortal(EnemyKind.Scurrier, hpScale, speedScale);
       }
     }
+  }
+
+  /** Everything comes through THE door — with a flare as it does. */
+  private spawnAtPortal(kind: EnemyKindId, hpScale: number, speedScale: number, scale = 1): void {
+    const a = Math.random() * Math.PI * 2;
+    const r = Math.random() * 0.45;
+    this.swarm.spawn(
+      kind,
+      portal.x + Math.cos(a) * r,
+      ENEMY.hoverHeight,
+      portal.z + Math.sin(a) * r,
+      hpScale,
+      speedScale,
+      scale,
+    );
+    this.portalPulse = 1;
   }
 
   // --- The wave sign. ------------------------------------------------------

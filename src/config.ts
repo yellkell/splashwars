@@ -138,19 +138,40 @@ export const WAVES = {
   baseSpeed: 0.34, // m/s drift toward the deck on wave 1
   speedPerWave: 0.04, // extra m/s per wave
   hpPerWave: 0.11, // fractional HP bump per wave
-  spawnRadius: [6.0, 9.5] as [number, number], // ring the squad appears on
-  /**
-   * Enemies only ever come from the FRONT — this arc, centred on -Z (the
-   * way the deck and the wave sign face). Being surrounded in a headset is
-   * miserable: you cannot watch your back, so anything spawning behind you
-   * is damage you never had a chance to answer.
-   */
-  spawnArc: Math.PI, // 180° across the front
-
   spawnRate: 14, // enemies released per second while a wave pours in
   standoffRadius: 1.35, // enemies press to this radius, then attack
   interWaveDelay: 2.0, // breather before the upgrade board appears
   bossScale: 2.8, // boss body scale multiplier
+};
+
+/**
+ * THE PORTAL — the single door THE THIRST pours out of. It opens on the far
+ * side of the tower from where you stood when you planted it, so the whole
+ * fight reads left to right: portal → your maze → the tower. One spawn
+ * point is what makes wall-building meaningful — a path has an entrance.
+ */
+export const PORTAL = {
+  distance: 6.0, // metres from the tower, along the player→tower line
+  radius: 0.85, // the ring's visual radius
+  height: 1.05, // ring centre height above the floor
+};
+
+/**
+ * THE GRID + WALLS — the build layer. The floor wears a subtle grid centred
+ * on the tower; WALL pieces snap to its cells and enemies PATH AROUND them
+ * (a flow field recomputed on every placement), so you funnel the swarm
+ * through your turret gauntlet. Placement that would seal the portal off
+ * from the tower entirely is refused — there must always be a way through.
+ */
+export const FIELD = {
+  cell: 0.6, // grid cell size, metres — one wall piece per cell
+  half: 14, // cells each side of the tower (29×29 board, ±8.4 m)
+};
+
+export const WALL = {
+  cost: 45, // cheap on purpose: mazing is bought by the metre
+  max: 24, // wall-piece cap per run
+  height: 0.72, // barrier height — drones refuse to cross it
 };
 
 /** Shared enemy shape constants. */

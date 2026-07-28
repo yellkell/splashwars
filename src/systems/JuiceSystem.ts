@@ -38,8 +38,9 @@ import {
 import { initDamageNumbers, popDamage, updateDamageNumbers } from '../fx/damageNumbers.js';
 import { ballDamage, damagePlayer, run, UpgradeId } from '../game/run.js';
 import { damageTower, tower } from '../game/tower.js';
+import { wallAt } from '../game/field.js';
 import * as sfx from '../audio/sfx.js';
-import { AOE, ARENA_BOUNDS, ENEMY_SHOT, PISTOL, TOWER } from '../config.js';
+import { AOE, ARENA_BOUNDS, ENEMY_SHOT, PISTOL, TOWER, WALL } from '../config.js';
 import { Quaternion } from 'three';
 
 const _pos = new Vector3();
@@ -164,6 +165,16 @@ export class JuiceSystem extends createSystem({}) {
             }
           }
         }
+      }
+
+      // --- The maze: juice from EITHER side smashes on a wall piece. ---
+      if (!hit && this.py[i] <= WALL.height + radius && wallAt(this.px[i], this.pz[i])) {
+        dropletBurst(_pos, 5, 0.8);
+        if (this.splatSfxAcc <= 0) {
+          sfx.hitSplat();
+          this.splatSfxAcc = 0.08;
+        }
+        hit = true;
       }
 
       // --- Floor landing: stamp the splat. ---

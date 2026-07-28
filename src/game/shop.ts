@@ -58,9 +58,10 @@ export interface PlacedTurret {
  * positions for the Chiller slow field. */
 export const placedTurrets: PlacedTurret[] = [];
 
-/** Build-mode state: non-null while a bought turret's ghost is out. */
+/** Build-mode state: non-null while a bought turret's or wall's ghost is
+ * out ('wall' is the maze piece; everything else is a turret kind). */
 export const build = {
-  placing: null as TurretKindId | null,
+  placing: null as TurretKindId | 'wall' | null,
 };
 
 export function clearTurrets(): void {

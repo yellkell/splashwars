@@ -28,6 +28,7 @@ import { addDrops as debugAddDrops, bank, sinks as sinkState, placedTurrets } fr
 import { WaterPistol } from './components/WaterPistol.js';
 import { debugLiveDigits, debugNumbersInstance, popDamage } from './fx/damageNumbers.js';
 import { stampSplat as debugStampSplat, wipeFloor as debugWipeFloor } from './fx/juice.js';
+import { flowAt as debugFlowAt, portal as debugPortal } from './game/field.js';
 import { Vector3 as DebugVec3 } from 'three';
 
 const container = document.getElementById('scene-container') as HTMLDivElement;
@@ -109,6 +110,12 @@ World.create(container, {
       sinks: () => ({ ...sinkState }),
       buyTurret: (kind = 'sprinkler', x = 0.8, z = -1.2) =>
         world.getSystem(TurretSystem)?.placeTurret(kind as never, new DebugVec3(x, 0, z)),
+      placeWall: (x = 0, z = -3) => world.getSystem(TurretSystem)?.placeWallAt(x, z),
+      portal: () => [+debugPortal.x.toFixed(2), +debugPortal.z.toFixed(2)],
+      flowProbe: (x = 0, z = -3) => {
+        const v = new DebugVec3();
+        return debugFlowAt(x, z, v) ? [+v.x.toFixed(2), +v.z.toFixed(2)] : null;
+      },
       pistols: () => {
         const ws = world.getSystem(WeaponSystem);
         if (!ws) return [];

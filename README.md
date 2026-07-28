@@ -52,8 +52,10 @@ no models, no textures, no sounds shipped.
   draw, release it to **throw the whole gun** — it tumbles, bursts on
   whatever it hits, and a fresh, full one respawns on your hip. With no
   auto-refill, that throw is your reload. And you can **CATCH**: squeeze
-  the grip while a thrown gun is in reach and it snaps back into your
-  palm, ammo intact — toss it, snatch it back, juggle it.
+  any EMPTY hand near a thrown gun and it snaps into that palm, ammo
+  intact — snatch your own throw back, or lob a pistol clean across your
+  body to the other hand (on a cross-catch the spare gun trades hips, so
+  each side always carries one).
 - **The sloshing tank** — world-space clipped-liquid shader (the Alyx
   trick): spring-damper slosh driven by real hand acceleration, ripple
   energy, meniscus foam, and a **frosted** blow-moulded shell over fully
@@ -99,6 +101,21 @@ no models, no textures, no sounds shipped.
   ghost of the juice tower that glides across the real floor wherever your
   HAND points (the ray leaves the grip along the pistol's own barrel axis);
   either trigger plants it (a plastic KACHUNK) and wave one rolls in.
+- **The board: one portal, one grid, your maze** — planting the tower
+  opens THE PORTAL 6 m past it: a violet ring with a swirling drink
+  inside, and every machine in every wave pours out of that ONE door
+  (flaring as it does). A subtle aqua grid paints the real floor around
+  the tower — faint in the fight, bright while a ghost is out — and WALL
+  pieces from the shop snap to its cells. Enemies never body through a
+  wall: two flow fields (Dijkstra from tower and portal, recomputed only
+  when the board changes) steer the whole swarm around your build with
+  zero per-enemy pathfinding — attackers descend one field to the tower,
+  juice-laden Sippers descend the other to flee back out the door. A
+  placement that would seal portal from tower entirely glows RED and
+  refuses to plant: you may funnel THE THIRST through your turret
+  gauntlet, you may not brick it out. THE GULP is the exception — too big
+  for a maze, it plows the straight line. Balls from either side smash
+  wetly on the walls.
   The reservoir shows its LIVE juice level through frosted plastic (the
   same clipped-liquid shader as the pistol tanks), and strikes jolt the
   surface. AGAIN after a wipe keeps your spot; MENU lifts the tower for a
@@ -112,7 +129,8 @@ no models, no textures, no sounds shipped.
   auto-firing tripod that locks a target, slews its head onto it at a
   finite turn rate and only fires once aligned), CHILLER (250 — an icy
   field that halves the speed of everything inside its floor ring), PUMP
-  (350 — trickles juice back into the tower). Bottom row, permanent money
+  (350 — trickles juice back into the tower), and WALL (45 — the maze
+  piece; snaps to the grid, capped per run). Bottom row, permanent money
   sinks that level base stats forever, each card wearing its LV badge:
   POWER (+15% ball damage per level), BIG TANKS (+3 balls in every fresh
   pistol per level), RESERVOIR (+60 tower capacity per level, filled on
