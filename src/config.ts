@@ -95,13 +95,31 @@ export const AUTO = {
  */
 export const HOLSTER = {
   /**
-   * Pitch applied to a HELD pistol, radians. The XR grip space's -Z runs
-   * along the controller handle, which sits nose-up when you hold a
-   * controller naturally — so a gun parented raw to the grip aims above
-   * where you think you're pointing. Negative tips the barrel back down to
-   * where your hand feels like it's aiming.
+   * FALLBACK pitch for a held pistol, radians — used only when the runtime
+   * gives no distinct target-ray pose (i.e. the desktop emulator).
+   *
+   * On a real headset the barrel is aligned to the platform's own AIM AXIS
+   * instead (input/aim.ts): WebXR reports a grip pose (where the controller
+   * body is) and a target-ray pose (where the platform says you're
+   * pointing), and they differ by a good deal of pitch. A gun parented raw
+   * to the grip therefore shoots along the controller HANDLE, well above
+   * the line your hand feels like it's aiming — which is why a hand-picked
+   * angle here never quite fixed it on every device.
+   *
+   * Measured on the Quest 3 runtime: the grip axis sits 45° ABOVE
+   * horizontal while the aim ray is dead level — a 45.5° mismatch, of
+   * which the old -0.32 here corrected barely a third. This fallback now
+   * matches that measurement.
    */
-  heldPitch: -0.32,
+  heldPitch: -0.79,
+  /**
+   * Sanity cap on the correction we'll take from the platform ray,
+   * radians — a guard against a pathological runtime, not a working
+   * limit: the real ~0.79 rad offset passes through untouched.
+   */
+  aimMaxCorrection: 1.05,
+  /** Extra nose-down trim on top of the platform aim, radians. Taste knob. */
+  aimTrim: 0,
   lateral: 0.24, // hip offset left/right of the head, metres
   height: 0.96, // holster height above the floor
   forward: 0.03, // nudged forward so it's visible in your periphery

@@ -30,6 +30,7 @@ import { createWaterPistol, type WaterPistolRig } from '../weapons/waterPistol.j
 import { requestBlast, squirtBlob } from '../combat/juiceBus.js';
 import { dropletBurst, stampSplat } from '../fx/juice.js';
 import { pulseHand } from '../input/haptics.js';
+import { heldAimQuat } from '../input/aim.js';
 import { run, UpgradeId } from '../game/run.js';
 import { app } from '../game/appState.js';
 import { build, sinks } from '../game/shop.js';
@@ -164,9 +165,9 @@ export class WeaponSystem extends createSystem({
             if (_gripPos.distanceTo(rig.group.position) <= HOLSTER.drawRadius) {
               grip.add(rig.group);
               rig.group.position.set(0, 0, 0);
-              // Tip the barrel down out of the grip's nose-up handle axis so
-              // the gun aims where your hand feels like it's aiming.
-              rig.group.quaternion.setFromAxisAngle(_e.set(1, 0, 0), HOLSTER.heldPitch);
+              // Point the barrel along the platform's AIM axis, not the
+              // controller handle — see input/aim.ts.
+              heldAimQuat(this.world, hand, rig.group.quaternion);
               e.setValue(WaterPistol, 'state', PistolState.Held);
               sfx.draw();
               pulseHand(this.world.session, HANDS[hand], 0.5, 50);
@@ -205,7 +206,7 @@ export class WeaponSystem extends createSystem({
             if (h2 !== hand) this.swapHands(e, hand, h2);
             grip2.add(rig.group);
             rig.group.position.set(0, 0, 0);
-            rig.group.quaternion.setFromAxisAngle(_e.set(1, 0, 0), HOLSTER.heldPitch);
+            heldAimQuat(this.world, h2, rig.group.quaternion);
             e.setValue(WaterPistol, 'state', PistolState.Held);
             this.heldNow[h2] = true;
             sfx.draw();
@@ -256,6 +257,11 @@ export class WeaponSystem extends createSystem({
     motion: HandMotion,
     delta: number,
   ): void {
+    // Re-seat the barrel on the aim axis every frame: with hand tracking
+    // the grip→ray offset moves with your fingers, and on controllers the
+    // ray pose can arrive a frame or two after the draw.
+    heldAimQuat(this.world, hand, rig.group.quaternion);
+
     const pull = gp?.getButtonValue(InputComponent.Trigger) ?? 0;
     const pressed = gp?.getButtonPressed(InputComponent.Trigger) ?? false;
     const firing = pressed || pull > 0.25;

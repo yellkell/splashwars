@@ -29,7 +29,8 @@ import { WaterPistol } from './components/WaterPistol.js';
 import { debugLiveDigits, debugNumbersInstance, popDamage } from './fx/damageNumbers.js';
 import { stampSplat as debugStampSplat, wipeFloor as debugWipeFloor } from './fx/juice.js';
 import { flowAt as debugFlowAt, portal as debugPortal } from './game/field.js';
-import { Vector3 as DebugVec3 } from 'three';
+import { Quaternion as DebugQuat, Vector3 as DebugVec3 } from 'three';
+import { heldAimQuat } from './input/aim.js';
 
 const container = document.getElementById('scene-container') as HTMLDivElement;
 
@@ -115,6 +116,22 @@ World.create(container, {
       flowProbe: (x = 0, z = -3) => {
         const v = new DebugVec3();
         return debugFlowAt(x, z, v) ? [+v.x.toFixed(2), +v.z.toFixed(2)] : null;
+      },
+      /** Barrel pitch each hand would hold, degrees (0 = level). */
+      aim: () => {
+        const q = new DebugQuat();
+        const gq = new DebugQuat();
+        const dir = new DebugVec3();
+        const out: Record<string, number | string> = {};
+        for (const [i, h] of (['left', 'right'] as const).entries()) {
+          const grip = world.playerSpaceEntities.gripSpaces[h]?.object3D;
+          if (!grip) { out[h] = 'untracked'; continue; }
+          heldAimQuat(world, i as 0 | 1, q);
+          grip.getWorldQuaternion(gq);
+          dir.set(0, 0, -1).applyQuaternion(gq.multiply(q));
+          out[h] = +((Math.asin(-dir.y) * 180) / Math.PI).toFixed(2);
+        }
+        return out;
       },
       pistols: () => {
         const ws = world.getSystem(WeaponSystem);

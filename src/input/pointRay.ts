@@ -1,23 +1,21 @@
 /**
  * Hand-ray floor picking — the placement pointer.
  *
- * Ghosts (the tower, bought turrets) used to glide on your GAZE, which
- * meant steering furniture with your neck. Now they follow your HAND: the
- * ray leaves the grip along the same tilted axis the pistol barrel uses
- * (HOLSTER.heldPitch), so the ghost lands where the gun in your hand is
- * pointing — point at the floor, pull the trigger, planted. The right hand
- * wins when both are tracked; head gaze stays as the no-controller fallback.
+ * Ghosts (the tower, bought turrets, wall pieces) used to glide on your
+ * GAZE, which meant steering furniture with your neck. Now they follow your
+ * HAND, down the very same aim axis the pistol barrel uses (input/aim.ts),
+ * so the ghost lands where the gun in your hand is pointing — point at the
+ * floor, pull the trigger, planted. The right hand wins when both are
+ * tracked; head gaze stays as the no-controller fallback.
  */
 
 import { Vector3, type World } from '@iwsdk/core';
-import { Quaternion } from 'three';
-import { HOLSTER, TOWER } from '../config.js';
+import { handAimRay } from './aim.js';
+import { TOWER } from '../config.js';
 
 const _origin = new Vector3();
 const _dir = new Vector3();
 const _head = new Vector3();
-const _q = new Quaternion();
-const _tilt = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), HOLSTER.heldPitch);
 
 /**
  * Where the player is pointing on the floor, clamped to the placing band
@@ -26,17 +24,9 @@ const _tilt = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), HOLSTER.he
 export function placementSpot(world: World, out: Vector3): void {
   world.camera.getWorldPosition(_head);
 
-  let found = false;
-  for (const hand of ['right', 'left'] as const) {
-    const grip = world.playerSpaceEntities.gripSpaces[hand]?.object3D;
-    if (!grip) continue;
-    grip.getWorldPosition(_origin);
-    grip.getWorldQuaternion(_q);
-    _q.multiply(_tilt);
-    _dir.set(0, 0, -1).applyQuaternion(_q);
-    found = true;
-    break;
-  }
+  // Same aim axis the pistol barrel uses, so the ghost lands exactly where
+  // the gun in your hand is pointing.
+  const found = handAimRay(world, 1, _origin, _dir) || handAimRay(world, 0, _origin, _dir);
   if (!found) {
     _origin.copy(_head);
     world.camera.getWorldDirection(_dir);
