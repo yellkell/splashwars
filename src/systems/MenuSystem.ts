@@ -216,10 +216,18 @@ export class MenuSystem extends createSystem({}) {
       ctx.fillText('RELEASE GRIP — throw the gun; a fresh one respawns', W / 2, 352);
     } else {
       const win = run.endReason === 'win';
-      ctx.fillStyle = win ? '#f0299b' : '#e0312e';
+      // Losing a DUEL has its own name: you got SLIMED.
+      const slimed = !win && app.mode === 'duel';
+      ctx.fillStyle = win ? '#f0299b' : slimed ? '#8bd12e' : '#e0312e';
       ctx.font = '900 72px system-ui, -apple-system, sans-serif';
       ctx.fillText(
-        win ? 'SOAKED! YOU WIN' : run.endReason === 'tower' ? 'TOWER DRAINED' : 'WIPED OUT',
+        win
+          ? 'SOAKED! YOU WIN'
+          : slimed
+            ? 'YOU GOT SLIMED'
+            : run.endReason === 'tower'
+              ? 'TOWER DRAINED'
+              : 'WIPED OUT',
         W / 2,
         92,
       );
@@ -238,7 +246,7 @@ export class MenuSystem extends createSystem({}) {
         win
           ? 'their deck drips. your crystals gleam.'
           : app.mode === 'duel'
-            ? 'the rival tops up its tank and waits…'
+            ? 'dripping head to toe. the rival tops up and waits…'
             : 'the reservoir refills, THE THIRST regroups…',
         W / 2,
         320,

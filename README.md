@@ -146,9 +146,13 @@ no models, no textures, no sounds shipped.
 - **DUEL — the second mode** — a 1v1 economy fight, StarCraft in
   miniature on a Blaston/FIRE FIGHT stage: two ROUND pedestals facing
   each other across a void, glossy white slab at floor level, aqua rim
-  tube, glow ring in each owner's colour. On the real floor around
-  yours: three MINERAL CRYSTALS (blue, glassy, lit from inside), a depot
-  bin, and two magenta JUICE POOLS. Shoot a crystal and minerals chip
+  tube, glow ring in each owner's colour. The floor is an expansion map:
+  FIVE mineral patches around each pedestal (blue, glassy, lit from
+  inside) plus FOUR contested neutrals in no-man's land that both sides'
+  miners may work — and patches are TARGETS: your balls smash minerals
+  straight out of the rival's (its lobs do the same to yours, and its
+  income collapses with its map). A depot bin and two magenta JUICE
+  POOLS round out your side. Shoot a crystal and minerals chip
   straight off it — that's the bootstrap — then buy cantaloupe-plastic
   MINER drones (orange flesh, pale rind hoops) that ferry loads
   crystal→depot forever. Juice is never bought directly: minerals buy
@@ -162,7 +166,8 @@ no models, no textures, no sounds shipped.
   same books on the same price list — saving for its own pump before
   anything else — and its purchases appear physically: panels you must
   crack, turrets you can pop, miners bobbing between its crystals. Drain
-  its shell before it soaks you. The watch banks MINERALS, Y opens the
+  its shell before it soaks you — losing a duel is called getting
+  SLIMED, and the plate says so. The watch banks MINERALS, Y opens the
   duel shop, and its lobs are the same dodgeable juice yours are.
 - **Menus you shoot** — the game has exactly one interaction verb. The
   title screen is a HOW TO PLAY plate over two mode cards — DEFENSE and

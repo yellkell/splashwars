@@ -213,7 +213,15 @@ export const DUEL = {
   startTanks: 3, // pistol-tank reserve you begin with (throws draw on it)
   /** Shooting a crystal chips minerals straight off it — the bootstrap. */
   mineralsPerShot: 3,
-  crystalCapacity: 400, // minerals in each cluster before it runs dry
+  crystalCapacity: 320, // minerals in each patch before it runs dry
+  /**
+   * ECONOMIC WARFARE: patches are targets. A ball landed on a RIVAL (or
+   * the rival's on yours) knocks this many minerals straight out of the
+   * patch — spilled, not stolen — until it's a dead grey husk. The rival
+   * aims a share of its shots at your patches for the same reason.
+   */
+  drainPerShot: 28,
+  aiCrystalAimChance: 0.25,
 
   minerCost: 60,
   minerMax: 4,

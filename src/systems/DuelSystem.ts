@@ -119,10 +119,14 @@ function buildDuelMaterials(): void {
 
 // --- Small structs. --------------------------------------------------------
 
+/** Who a mineral patch belongs to. Neutrals sit in no-man's land between
+ * the pedestals — both sides' miners may work them, first come first fed. */
+type PatchOwner = 'mine' | 'theirs' | 'neutral';
+
 interface Crystal {
   group: Group;
   left: number;
-  target: BallTarget;
+  owner: PatchOwner;
 }
 
 interface Miner {
@@ -502,19 +506,24 @@ export class DuelSystem extends createSystem({}) {
     theirs.position.set(0, 0, DUEL.enemyZ);
     this.root.add(theirs);
 
-    // Your crystals — on the REAL FLOOR around your pedestal, an
-    // over-the-shoulder shot away.
-    for (const [x, z] of [[-1.75, 0.7], [1.75, 0.6], [0, 1.85]] as const) {
+    // MINERAL PATCHES everywhere — a proper expansion map. Five around
+    // each pedestal on the real floor, plus four CONTESTED neutrals in
+    // no-man's land between and beside the fight. Every one is live: mine
+    // yours and the neutrals, SHOOT DOWN the rival's.
+    const ez = DUEL.enemyZ;
+    const layout: Array<[number, number, PatchOwner]> = [
+      [-1.75, 0.7, 'mine'], [1.75, 0.6, 'mine'], [0, 1.85, 'mine'],
+      [-2.6, 1.4, 'mine'], [2.6, 1.3, 'mine'],
+      [-1.75, ez - 0.7, 'theirs'], [1.75, ez - 0.6, 'theirs'], [0, ez - 1.85, 'theirs'],
+      [-2.6, ez - 1.4, 'theirs'], [2.6, ez - 1.3, 'theirs'],
+      [-2.3, -3.0, 'neutral'], [2.3, -3.2, 'neutral'],
+      [-1.5, -4.6, 'neutral'], [1.5, -4.4, 'neutral'],
+    ];
+    for (const [x, z, owner] of layout) {
       const group = this.crystalCluster();
       group.position.set(x, 0.02, z);
       this.root.add(group);
-      this.crystals.push({ group, left: DUEL.crystalCapacity, target: null! });
-    }
-    // Rival crystals (set dressing — its books are abstract).
-    for (const [x, z] of [[-1.75, DUEL.enemyZ - 0.7], [1.75, DUEL.enemyZ - 0.6]] as const) {
-      const group = this.crystalCluster();
-      group.position.set(x, 0.02, z);
-      this.root.add(group);
+      this.crystals.push({ group, left: DUEL.crystalCapacity, owner });
     }
 
     // Juice pools flanking both pedestals — extractor real estate.
@@ -563,10 +572,31 @@ export class DuelSystem extends createSystem({}) {
   // --- Targets (what juice can hit). ---------------------------------------
 
   private registerTargets(): void {
-    // Crystals: chip minerals off with every landed ball.
     for (const c of this.crystals) {
       const pos = c.group.position.clone().setY(0.32);
-      c.target = {
+      if (c.owner === 'theirs') {
+        // The rival's patches: your balls SMASH minerals out of them.
+        addBallTarget({
+          pos,
+          radius: 0.38,
+          hitByHostile: false,
+          alive: () => c.left > 0,
+          onHit: (_d, at) => {
+            const spilled = Math.min(DUEL.drainPerShot, c.left);
+            c.left -= spilled;
+            popDamage(_pos.copy(at).setY(at.y + 0.15), spilled, false, 0xff8fb0);
+            sfx.hitSplat();
+            if (c.left <= 0) {
+              this.exhaustCrystal(c);
+              this.world.getSystem(EnemySystem)?.setSign('THEIR PATCH IS DOWN', '#f0299b');
+            }
+            return true;
+          },
+        });
+        continue;
+      }
+      // Yours and the neutrals: your balls MINE them…
+      addBallTarget({
         pos,
         radius: 0.38,
         hitByHostile: false,
@@ -580,8 +610,28 @@ export class DuelSystem extends createSystem({}) {
           if (c.left <= 0) this.exhaustCrystal(c);
           return true;
         },
-      };
-      addBallTarget(c.target);
+      });
+      // …and the rival's lobs DRAIN your own (not the neutrals — it wants
+      // those for itself).
+      if (c.owner === 'mine') {
+        addBallTarget({
+          pos,
+          radius: 0.38,
+          hitByHostile: true,
+          alive: () => c.left > 0,
+          onHit: (_d, at) => {
+            const spilled = Math.min(DUEL.drainPerShot, c.left);
+            c.left -= spilled;
+            popDamage(_pos.copy(at).setY(at.y + 0.15), spilled, false, 0xb18cff);
+            sfx.towerHit();
+            if (c.left <= 0) {
+              this.exhaustCrystal(c);
+              this.world.getSystem(EnemySystem)?.setSign('YOUR PATCH IS DOWN', '#e0312e');
+            }
+            return true;
+          },
+        });
+      }
     }
     // The rival's shell.
     addBallTarget({
@@ -616,6 +666,8 @@ export class DuelSystem extends createSystem({}) {
 
   // --- Miners. -------------------------------------------------------------
 
+  private enemyDepotPos = new Vector3(-0.9, 0, DUEL.enemyZ - 1.0);
+
   private addMiner(): void {
     const { group, carry } = this.minerDrone();
     group.position.copy(this.depotPos);
@@ -625,7 +677,7 @@ export class DuelSystem extends createSystem({}) {
       carry,
       phase: 'toCrystal',
       timer: 0,
-      crystal: this.pickCrystal(),
+      crystal: this.pickCrystal(['mine', 'neutral']),
       from: this.depotPos.clone(),
       to: new Vector3(),
     });
@@ -633,37 +685,39 @@ export class DuelSystem extends createSystem({}) {
 
   private addEnemyMinerBot(): void {
     const { group, carry } = this.minerDrone();
-    const depot = _spot.set(-0.9, 0, DUEL.enemyZ - 1.0);
-    group.position.copy(depot);
+    group.position.copy(this.enemyDepotPos);
     this.root.add(group);
     this.enemyMinerBots.push({
       group,
       carry,
       phase: 'toCrystal',
       timer: 0,
-      crystal: Math.random() < 0.5 ? 0 : 1,
-      from: depot.clone(),
+      crystal: this.pickCrystal(['theirs', 'neutral']),
+      from: this.enemyDepotPos.clone(),
       to: new Vector3(),
     });
   }
 
-  private pickCrystal(): number {
-    const open = this.crystals.map((c, i) => (c.left > 0 ? i : -1)).filter((i) => i >= 0);
+  /** A random open patch among the given owners (-1 = all dry). Neutrals
+   * are on BOTH lists — first come, first fed. */
+  private pickCrystal(sides: PatchOwner[]): number {
+    const open = this.crystals
+      .map((c, i) => (c.left > 0 && sides.includes(c.owner) ? i : -1))
+      .filter((i) => i >= 0);
     if (open.length === 0) return -1;
     return open[Math.floor(Math.random() * open.length)];
   }
 
-  /** Drive one fleet of miner drones (yours pays out; the rival's is set
-   * dressing — its books accrue in updateAI). */
+  /** Drive one fleet of miner drones. Yours pays out at the depot; the
+   * rival's drains the patches it works (its BOOKS are abstract, but the
+   * minerals visibly leave the map — and its income scales with what its
+   * side of the map still holds). */
   private updateMiners(delta: number, fleet: Miner[], mine: boolean): void {
     for (const m of fleet) {
       m.timer += delta;
-      const crystalPos = mine
-        ? m.crystal >= 0
-          ? this.crystals[m.crystal].group.position
-          : this.depotPos
-        : _spot.set(m.crystal === 0 ? -1.75 : 1.75, 0, DUEL.enemyZ - 0.65);
-      const depotPos = mine ? this.depotPos : _pos.set(-0.9, 0, DUEL.enemyZ - 1.0);
+      const crystalPos =
+        m.crystal >= 0 ? this.crystals[m.crystal].group.position : mine ? this.depotPos : this.enemyDepotPos;
+      const depotPos = mine ? this.depotPos : this.enemyDepotPos;
 
       switch (m.phase) {
         case 'toCrystal': {
@@ -700,19 +754,21 @@ export class DuelSystem extends createSystem({}) {
             m.phase = 'toCrystal';
             m.timer = 0;
             m.from.copy(m.group.position);
-            if (mine) {
-              // The delivery: minerals in the bank, straight off the rock.
-              const c = m.crystal >= 0 ? this.crystals[m.crystal] : undefined;
-              const gain = c ? Math.min(DUEL.minerYield, c.left) : 0;
-              if (c && gain > 0) {
-                c.left -= gain;
+            const c = m.crystal >= 0 ? this.crystals[m.crystal] : undefined;
+            const gain = c ? Math.min(DUEL.minerYield, c.left) : 0;
+            if (c && gain > 0) {
+              c.left -= gain;
+              if (c.left <= 0) this.exhaustCrystal(c);
+              if (mine) {
+                // The delivery: minerals in the bank, straight off the rock.
                 addDrops(gain);
                 popDamage(_pos.copy(depotPos).setY(0.45), gain, false, 0x7ad4ff);
                 sfx.coin(1);
-                if (c.left <= 0) this.exhaustCrystal(c);
               }
-              m.crystal = this.pickCrystal();
             }
+            m.crystal = mine
+              ? this.pickCrystal(['mine', 'neutral'])
+              : this.pickCrystal(['theirs', 'neutral']);
           }
           break;
         }
@@ -964,7 +1020,21 @@ export class DuelSystem extends createSystem({}) {
       this.enemyShots -= 1;
       _pos.copy(this.avatar.position);
       _pos.y -= 0.05;
-      _vel.copy(_head).sub(_pos);
+      // Economic warfare cuts both ways: a share of its shots go for YOUR
+      // patches instead of your head.
+      let aimX = _head.x;
+      let aimY = _head.y;
+      let aimZ = _head.z;
+      if (Math.random() < DUEL.aiCrystalAimChance) {
+        const idx = this.pickCrystal(['mine']);
+        if (idx >= 0) {
+          const p = this.crystals[idx].group.position;
+          aimX = p.x;
+          aimY = 0.3;
+          aimZ = p.z;
+        }
+      }
+      _vel.set(aimX, aimY, aimZ).sub(_pos);
       const dist = _vel.length();
       _vel.normalize().multiplyScalar(4.4);
       _vel.y += (2.6 * dist) / (2 * 4.4);
@@ -977,8 +1047,18 @@ export class DuelSystem extends createSystem({}) {
   /** The rival's books: same price list, purchases appear on its deck. */
   private updateAI(delta: number): void {
     if (this.avatarHp <= 0) return;
+    // Its income is tied to the map: shoot out its patches (and starve the
+    // neutrals) and the rival's economy visibly collapses with them.
+    let accessible = 0;
+    let open = 0;
+    for (const c of this.crystals) {
+      if (c.owner === 'mine') continue;
+      accessible += 1;
+      if (c.left > 0) open += 1;
+    }
+    const supply = accessible > 0 ? open / accessible : 0;
     this.enemyMinerals +=
-      (DUEL.aiIncomeBase + DUEL.aiIncomePerMiner * this.enemyMinerBots.length) * delta;
+      (DUEL.aiIncomeBase + DUEL.aiIncomePerMiner * this.enemyMinerBots.length) * supply * delta;
     this.aiAcc += delta;
     if (this.aiAcc < 0.6) return;
     this.aiAcc = 0;
@@ -1162,6 +1242,11 @@ export class DuelSystem extends createSystem({}) {
       miners: this.miners.length,
       extractors: this.extractors.filter((e) => e.mine).length,
       aiExtractors: this.extractors.filter((e) => !e.mine).length,
+      patches: {
+        mine: this.crystals.filter((c) => c.owner === 'mine' && c.left > 0).length,
+        neutral: this.crystals.filter((c) => c.owner === 'neutral' && c.left > 0).length,
+        theirs: this.crystals.filter((c) => c.owner === 'theirs' && c.left > 0).length,
+      },
       turrets: this.myTurrets.length,
       shields: this.myShields.map((p) => (p ? Math.round(p.hp) : 0)),
       avatarHp: Math.round(this.avatarHp),
