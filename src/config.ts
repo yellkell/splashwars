@@ -204,9 +204,10 @@ export const WALL = {
  * Win by draining the rival's shell; lose by getting soaked yourself.
  */
 export const DUEL = {
-  platformW: 3.0,
-  platformD: 2.6,
-  enemyZ: -8, // centre of the rival's deck (yours is at the origin)
+  /** Blaston/FIRE FIGHT layout: two ROUND pedestals facing across a void —
+   * glossy white slab sunk to floor level, aqua rim tube, glow ring. */
+  platformR: 1.05,
+  enemyZ: -7.5, // centre of the rival's pedestal (yours is at the origin)
 
   startMinerals: 40,
   startTanks: 3, // pistol-tank reserve you begin with (throws draw on it)
@@ -220,7 +221,14 @@ export const DUEL = {
   minerLeg: 1.6, // seconds per travel leg (crystal↔depot)
   minerDig: 1.2, // seconds nose-down in the crystal
 
-  juiceCost: 25, // instantly refills both pistols AND banks +1 reserve tank
+  /** The EXTRACTOR — juice is HARVESTED, not bought. Two magenta juice
+   * pools sit on the floor flanking your pedestal; an extractor pumps one
+   * and banks a reserve tank every cycle. Respawning pistols draw on the
+   * reserve, so the pumps ARE your ammo line. */
+  extractorCost: 80,
+  extractorMax: 2, // one per pool
+  extractorPeriod: 9, // seconds per tank
+  tankCap: 6, // the reserve stops banking here — spend it or waste it
 
   turretCost: 100,
   turretMax: 3,
@@ -239,7 +247,8 @@ export const DUEL = {
   // price list you do. Purchases show up on its deck so you can read them.
   aiIncomeBase: 1.7, // minerals per second before miners
   aiIncomePerMiner: 1.0,
-  aiShotsPerJuice: 14, // shots per juice purchase, mirroring your tank
+  aiShotsPerTank: 14, // shots its extractor banks per cycle
+  aiShotCap: 28,
 };
 
 /** Shared enemy shape constants. */

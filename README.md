@@ -144,24 +144,26 @@ no models, no textures, no sounds shipped.
   Turrets render from module-cached merged geometry and shared
   MeshStandard materials, so a maxed field stays a handful of draw calls.
 - **DUEL — the second mode** — a 1v1 economy fight, StarCraft in
-  miniature. Two floating decks face each other across a gap: yours has
-  three MINERAL CRYSTALS (blue, glassy, lit from inside), a depot bin,
-  four SHIELD SLOTS across the front edge and room for three turrets; the
-  rival machine's deck mirrors it. Shoot a crystal and minerals chip
+  miniature on a Blaston/FIRE FIGHT stage: two ROUND pedestals facing
+  each other across a void, glossy white slab at floor level, aqua rim
+  tube, glow ring in each owner's colour. On the real floor around
+  yours: three MINERAL CRYSTALS (blue, glassy, lit from inside), a depot
+  bin, and two magenta JUICE POOLS. Shoot a crystal and minerals chip
   straight off it — that's the bootstrap — then buy cantaloupe-plastic
   MINER drones (orange flesh, pale rind hoops) that ferry loads
-  crystal→depot forever. Minerals buy JUICE, the second resource: it
-  fills both pistols on the spot and stocks the RESERVE that respawning
-  guns draw from — out of reserve, a fresh pistol arrives with dregs.
-  They also buy TURRETS (max 3, planted on your own deck, auto-lobbing at
-  the rival) and SHIELDS — Fortnite-style panels placed into the four
-  front slots (two top, two bottom) that soak incoming lobs until they
-  shatter. The rival runs the same books on the same price list, and its
-  purchases appear physically: panels you must crack, turrets you can
-  pop, miners bobbing between its crystals. Drain its shell before it
-  soaks you. The watch banks MINERALS, Y opens the duel shop, and the
-  whole thing shares the ball sim — its lobs are the same dodgeable juice
-  yours are.
+  crystal→depot forever. Juice is never bought directly: minerals buy
+  the EXTRACTOR, a plastic pump that squats over a juice pool and banks
+  one RESERVE TANK per cycle — and respawning pistols draw on that
+  reserve, so the pumps are your ammo line (out of reserve, a fresh
+  pistol arrives with dregs). Minerals also buy TURRETS (max 3, planted
+  on your own pedestal, auto-lobbing at the rival) and SHIELDS —
+  Fortnite-style panels placed into the four front slots (two top, two
+  bottom) that soak incoming lobs until they shatter. The rival runs the
+  same books on the same price list — saving for its own pump before
+  anything else — and its purchases appear physically: panels you must
+  crack, turrets you can pop, miners bobbing between its crystals. Drain
+  its shell before it soaks you. The watch banks MINERALS, Y opens the
+  duel shop, and its lobs are the same dodgeable juice yours are.
 - **Menus you shoot** — the game has exactly one interaction verb. The
   title screen is a HOW TO PLAY plate over two mode cards — DEFENSE and
   DUEL: draw and shoot the game you want. Losing brings a WIPED OUT / TOWER DRAINED plate (wave / pops

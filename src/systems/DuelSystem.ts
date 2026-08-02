@@ -1,17 +1,22 @@
 /**
  * DUEL — the 1v1 mode. StarCraft in miniature, played with water pistols.
  *
- * Two floating decks face each other across a gap. Yours has three MINERAL
- * CRYSTALS (blue, glassy, StarCraft through and through), a DEPOT bin, four
- * SHIELD SLOTS across the front edge (two top, two bottom — Fortnite-style
- * panel building) and room for three turrets. The rival machine's deck
- * mirrors yours, and IT plays the same game you do.
+ * Two ROUND pedestals face each other across a void — the Blaston /
+ * FIRE FIGHT layout: glossy white slab at floor level, aqua rim tube, glow
+ * ring in the owner's colour. Around YOURS, on the real floor: three
+ * MINERAL CRYSTALS (blue, glassy, StarCraft through and through), a DEPOT
+ * bin, and two magenta JUICE POOLS. Across your pedestal's front edge:
+ * four SHIELD SLOTS (two top, two bottom — Fortnite-style panel building).
+ * The rival machine's side mirrors yours, and IT plays the same game.
  *
- * The economy: shoot a crystal and minerals chip straight off it (the
- * bootstrap); buy cantaloupe-plastic MINER drones and they ferry loads
- * crystal→depot forever. Minerals buy JUICE — the second resource, which
- * fills your pistols and stocks the reserve your respawning guns draw on —
- * plus TURRETS and SHIELDS. Run the rival out of shell before it soaks you.
+ * The economy is dual-resource: shoot a crystal and minerals chip straight
+ * off it (the bootstrap); cantaloupe-plastic MINER drones ferry loads
+ * crystal→depot forever. Minerals then buy the EXTRACTOR — a pump that
+ * squats over a juice pool and banks a reserve tank per cycle. Juice is
+ * never bought directly: it is EXTRACTED, and respawning pistols draw on
+ * that reserve — the pumps are your ammo line, vespene with a trigger.
+ * Minerals also buy TURRETS (max 3, on your pedestal) and SHIELDS. Run the
+ * rival out of shell before it soaks you.
  *
  * The rival AI runs an abstract copy of the same books (income per miner,
  * same price list) and its purchases appear physically on its deck: shield
@@ -24,6 +29,7 @@ import { createSystem, InputComponent, Vector3 } from '@iwsdk/core';
 import {
   BoxGeometry,
   CapsuleGeometry,
+  CircleGeometry,
   ConeGeometry,
   CylinderGeometry,
   Group,
@@ -31,10 +37,12 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   OctahedronGeometry,
+  RingGeometry,
   SphereGeometry,
   TorusGeometry,
   type Object3D,
 } from 'three';
+import { glossyPlastic, mattePlastic } from '../materials/plastic.js';
 import { CardBoard } from '../ui/cardBoard.js';
 import { EnemySystem } from './EnemySystem.js';
 import { WeaponSystem } from './WeaponSystem.js';
@@ -142,10 +150,18 @@ interface DuelTurret {
   target?: BallTarget;
 }
 
-// Slot layout: front edge, 2 columns × 2 rows (bottom row 0-1, top 2-3).
-const SLOT_X = [-0.72, 0.72];
+interface Extractor {
+  group: Group;
+  piston: Mesh;
+  timer: number;
+  mine: boolean;
+}
+
+// Slot layout: front edge, 2 columns × 2 rows (bottom row 0-1, top 2-3),
+// sized so the four panels together span the round pedestal's width.
+const SLOT_X = [-0.55, 0.55];
 const SLOT_Y = [0.57, 1.62];
-const PANEL_W = 1.4;
+const PANEL_W = 1.05;
 const PANEL_H = 1.05;
 
 function slotCentre(slot: number, z: number, out: Vector3): Vector3 {
@@ -160,8 +176,15 @@ export class DuelSystem extends createSystem({}) {
 
   // Your side.
   private crystals: Crystal[] = [];
-  private depotPos = new Vector3(0.55, 0, 0.4);
+  private depotPos = new Vector3(0.9, 0, 1.0);
   private miners: Miner[] = [];
+  // Juice pools flank each pedestal; extractors build onto them.
+  private myPools = [new Vector3(-2.05, 0, -0.1), new Vector3(2.05, 0, -0.1)];
+  private enemyPools = [
+    new Vector3(-2.05, 0, DUEL.enemyZ + 0.1),
+    new Vector3(2.05, 0, DUEL.enemyZ + 0.1),
+  ];
+  private extractors: Extractor[] = [];
   private myShields: (ShieldPanel | null)[] = [null, null, null, null];
   private myTurrets: DuelTurret[] = [];
   private slotGhosts: Mesh[] = [];
@@ -207,6 +230,8 @@ export class DuelSystem extends createSystem({}) {
     for (const t of [...this.myTurrets, ...this.enemyTurrets]) t.group.removeFromParent();
     this.myTurrets.length = 0;
     this.enemyTurrets.length = 0;
+    for (const ex of this.extractors) ex.group.removeFromParent();
+    this.extractors.length = 0;
     for (const s of [...this.myShields, ...this.enemyShields]) s?.group.removeFromParent();
     this.myShields.fill(null);
     this.enemyShields.fill(null);
@@ -281,30 +306,116 @@ export class DuelSystem extends createSystem({}) {
     this.updateMiners(delta, this.miners, true);
     this.updateMiners(delta, this.enemyMinerBots, false);
     this.updateCrystals();
+    this.updateExtractors(delta);
     this.updateAvatar(delta);
     this.updateTurrets(delta);
     this.updateAI(delta);
   }
 
+  /** Pumps drink on a cycle: yours bank reserve tanks, theirs bank shots. */
+  private updateExtractors(delta: number): void {
+    for (const ex of this.extractors) {
+      ex.timer += delta;
+      // Piston chugs faster as the cycle nears payoff.
+      const k = ex.timer / DUEL.extractorPeriod;
+      ex.piston.position.y = 0.45 + Math.abs(Math.sin(this.time * (3 + k * 5))) * 0.09;
+      if (ex.timer < DUEL.extractorPeriod) continue;
+      ex.timer = 0;
+      dropletBurst(_pos.copy(ex.group.position).setY(0.5), 6, 0.8);
+      if (ex.mine) {
+        if (duel.tanks < DUEL.tankCap) {
+          duel.tanks += 1;
+          sfx.refund();
+        }
+      } else {
+        this.enemyShots = Math.min(DUEL.aiShotCap, this.enemyShots + DUEL.aiShotsPerTank);
+      }
+    }
+  }
+
   // --- The arena (built once). --------------------------------------------
 
-  private deck(trim: MeshStandardMaterial): Group {
+  /**
+   * The Blaston/FIRE FIGHT pedestal: a glossy round slab sunk so its top
+   * face sits at floor level, matte aqua skirt below, an inflatable-looking
+   * aqua rim tube hugging the edge, and a glow ring inside it in the
+   * owner's colour — magenta for you, team violet for the rival.
+   */
+  private deck(glow: number): Group {
     const g = new Group();
+    const r = DUEL.platformR;
     const slab = new Mesh(
-      new BoxGeometry(DUEL.platformW, 0.06, DUEL.platformD),
-      sharedTurretAssets().matWhite,
+      new CylinderGeometry(r, r * 0.92, 0.12, 48),
+      glossyPlastic(PALETTE.deckWhite, 0.35),
     );
-    slab.position.y = 0.03;
+    slab.position.y = -0.06;
     g.add(slab);
-    for (const side of [-1, 1]) {
-      const rail = new Mesh(new BoxGeometry(DUEL.platformW, 0.03, 0.07), trim);
-      rail.position.set(0, 0.075, side * (DUEL.platformD / 2 - 0.035));
-      g.add(rail);
-      const railX = new Mesh(new BoxGeometry(0.07, 0.03, DUEL.platformD), trim);
-      railX.position.set(side * (DUEL.platformW / 2 - 0.035), 0.075, 0);
-      g.add(railX);
-    }
+    const skirt = new Mesh(
+      new CylinderGeometry(r * 0.92, r * 0.82, 0.1, 48),
+      mattePlastic(PALETTE.water),
+    );
+    skirt.position.y = -0.16;
+    g.add(skirt);
+    const rim = new Mesh(
+      new TorusGeometry(r, 0.045, 18, 64),
+      glossyPlastic(PALETTE.deckAqua, 0.22),
+    );
+    rim.rotation.x = Math.PI / 2;
+    g.add(rim);
+    const ring = new Mesh(
+      new RingGeometry(r - 0.075, r - 0.055, 64),
+      new MeshBasicMaterial({ color: glow, transparent: true, opacity: 0.85 }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.012;
+    g.add(ring);
     return g;
+  }
+
+  /** A juice pool on the floor — the geyser an extractor taps. */
+  private juicePool(): Group {
+    const g = new Group();
+    const pool = new Mesh(
+      new CircleGeometry(0.42, 32),
+      new MeshStandardMaterial({ color: PALETTE.juice, roughness: 0.1, metalness: 0 }),
+    );
+    pool.rotation.x = -Math.PI / 2;
+    pool.position.y = 0.006;
+    g.add(pool);
+    const deep = new Mesh(
+      new CircleGeometry(0.2, 24),
+      new MeshBasicMaterial({ color: PALETTE.juiceDeep }),
+    );
+    deep.rotation.x = -Math.PI / 2;
+    deep.position.y = 0.009;
+    g.add(deep);
+    return g;
+  }
+
+  /** The extractor: a plastic pump that squats over a pool and drinks. */
+  private buildExtractor(at: Vector3, mine: boolean): Extractor {
+    const { matWhite, matRed } = sharedTurretAssets();
+    const g = new Group();
+    const body = new Mesh(new CylinderGeometry(0.16, 0.2, 0.34, 14), matWhite);
+    body.position.y = 0.17;
+    g.add(body);
+    const dome = new Mesh(new SphereGeometry(0.15, 14, 10), mine ? matRed : matViolet);
+    dome.scale.y = 0.6;
+    dome.position.y = 0.36;
+    g.add(dome);
+    const piston = new Mesh(new CylinderGeometry(0.05, 0.05, 0.24, 10), mine ? matRed : matViolet);
+    piston.position.y = 0.45;
+    g.add(piston);
+    // The intake hose arcing down into the juice.
+    const hose = new Mesh(new TorusGeometry(0.17, 0.035, 8, 14, Math.PI * 0.9), matDark);
+    hose.rotation.y = Math.PI / 2;
+    hose.position.set(0.16, 0.22, 0);
+    g.add(hose);
+    g.position.copy(at);
+    this.root.add(g);
+    const ex: Extractor = { group: g, piston, timer: 0, mine };
+    this.extractors.push(ex);
+    return ex;
   }
 
   private crystalCluster(): Group {
@@ -383,26 +494,34 @@ export class DuelSystem extends createSystem({}) {
   }
 
   private buildArena(): void {
-    // Your deck sits under you; the rival's faces it across the gap.
-    const mine = this.deck(sharedTurretAssets().matRed);
-    mine.position.set(0, 0, -0.1);
+    // Two round pedestals facing each other across the void, FIRE FIGHT
+    // style — yours ringed magenta, the rival's ringed violet.
+    const mine = this.deck(PALETTE.juice);
     this.root.add(mine);
-    const theirs = this.deck(matViolet);
+    const theirs = this.deck(0x7b5cff);
     theirs.position.set(0, 0, DUEL.enemyZ);
     this.root.add(theirs);
 
-    // Your crystals — around you, in reach of a lazy over-shoulder shot.
-    for (const [x, z] of [[-1.15, 0.75], [1.15, 0.75], [0, 1.0]] as const) {
+    // Your crystals — on the REAL FLOOR around your pedestal, an
+    // over-the-shoulder shot away.
+    for (const [x, z] of [[-1.75, 0.7], [1.75, 0.6], [0, 1.85]] as const) {
       const group = this.crystalCluster();
-      group.position.set(x, 0.06, z);
+      group.position.set(x, 0.02, z);
       this.root.add(group);
       this.crystals.push({ group, left: DUEL.crystalCapacity, target: null! });
     }
     // Rival crystals (set dressing — its books are abstract).
-    for (const [x, z] of [[-1.15, DUEL.enemyZ - 0.75], [1.15, DUEL.enemyZ - 0.75]] as const) {
+    for (const [x, z] of [[-1.75, DUEL.enemyZ - 0.7], [1.75, DUEL.enemyZ - 0.6]] as const) {
       const group = this.crystalCluster();
-      group.position.set(x, 0.06, z);
+      group.position.set(x, 0.02, z);
       this.root.add(group);
+    }
+
+    // Juice pools flanking both pedestals — extractor real estate.
+    for (const p of [...this.myPools, ...this.enemyPools]) {
+      const pool = this.juicePool();
+      pool.position.copy(p);
+      this.root.add(pool);
     }
 
     // The depot: a little red-lidded bin the miners pour into.
@@ -419,7 +538,7 @@ export class DuelSystem extends createSystem({}) {
 
     // The rival itself.
     this.avatar = this.avatarBot();
-    this.avatar.position.set(0, 1.35, DUEL.enemyZ + 0.35);
+    this.avatar.position.set(0, 1.35, DUEL.enemyZ + 0.3);
     this.root.add(this.avatar);
 
     // Ghost frames for your four shield slots (shown while placing).
@@ -434,11 +553,11 @@ export class DuelSystem extends createSystem({}) {
   }
 
   private myShieldZ(): number {
-    return -0.1 - DUEL.platformD / 2; // your deck's front edge
+    return -DUEL.platformR; // your pedestal's front edge
   }
 
   private enemyShieldZ(): number {
-    return DUEL.enemyZ + DUEL.platformD / 2; // their front edge, facing you
+    return DUEL.enemyZ + DUEL.platformR; // their front edge, facing you
   }
 
   // --- Targets (what juice can hit). ---------------------------------------
@@ -514,7 +633,7 @@ export class DuelSystem extends createSystem({}) {
 
   private addEnemyMinerBot(): void {
     const { group, carry } = this.minerDrone();
-    const depot = _spot.set(-0.5, 0, DUEL.enemyZ - 0.3);
+    const depot = _spot.set(-0.9, 0, DUEL.enemyZ - 1.0);
     group.position.copy(depot);
     this.root.add(group);
     this.enemyMinerBots.push({
@@ -543,8 +662,8 @@ export class DuelSystem extends createSystem({}) {
         ? m.crystal >= 0
           ? this.crystals[m.crystal].group.position
           : this.depotPos
-        : _spot.set(m.crystal === 0 ? -1.15 : 1.15, 0, DUEL.enemyZ - 0.75);
-      const depotPos = mine ? this.depotPos : _pos.set(-0.5, 0, DUEL.enemyZ - 0.3);
+        : _spot.set(m.crystal === 0 ? -1.75 : 1.75, 0, DUEL.enemyZ - 0.65);
+      const depotPos = mine ? this.depotPos : _pos.set(-0.9, 0, DUEL.enemyZ - 1.0);
 
       switch (m.phase) {
         case 'toCrystal': {
@@ -744,10 +863,14 @@ export class DuelSystem extends createSystem({}) {
       this.root.add(this.ghost);
     }
     placementSpot(this.world, _spot);
-    // Your turrets live on YOUR deck.
-    _spot.x = Math.max(-DUEL.platformW / 2 + 0.2, Math.min(DUEL.platformW / 2 - 0.2, _spot.x));
-    _spot.z = Math.max(this.myShieldZ() + 0.35, Math.min(DUEL.platformD / 2 - 0.3, _spot.z));
-    this.ghost.position.copy(_spot).setY(0.06);
+    // Your turrets live on YOUR pedestal: clamp to a ring on the round
+    // deck (never dead-centre — that's where you stand).
+    {
+      const d = Math.hypot(_spot.x, _spot.z) || 1e-3;
+      const r = Math.max(0.45, Math.min(DUEL.platformR - 0.18, d));
+      _spot.set((_spot.x / d) * r, 0, (_spot.z / d) * r);
+    }
+    this.ghost.position.copy(_spot).setY(0.02);
 
     for (const hand of [0, 1] as const) {
       const gp = this.input.xr.gamepads[HANDS[hand]];
@@ -762,7 +885,7 @@ export class DuelSystem extends createSystem({}) {
         return;
       }
       const turret = this.buildTurret(true);
-      turret.group.position.copy(_spot).setY(0.06);
+      turret.group.position.copy(_spot).setY(0.02);
       this.myTurrets.push(turret);
       sfx.placeTower();
       dropletBurst(_pos.copy(_spot).setY(0.3), 8, 0.8);
@@ -860,10 +983,16 @@ export class DuelSystem extends createSystem({}) {
     if (this.aiAcc < 0.6) return;
     this.aiAcc = 0;
 
-    // Priorities: ammo, cover, guns, economy — a build order, basically.
-    if (this.enemyShots <= 3 && this.enemyMinerals >= DUEL.juiceCost) {
-      this.enemyMinerals -= DUEL.juiceCost;
-      this.enemyShots += DUEL.aiShotsPerJuice;
+    // Priorities: ammo line first, then cover, guns, economy — a build
+    // order, basically. Its extractor IS its juice supply, like yours, so
+    // until the first pump is up it SAVES — no impulse shield shopping
+    // spending it broke while its shots run out.
+    const aiExCount = this.extractors.filter((e) => !e.mine).length;
+    if (aiExCount === 0) {
+      if (this.enemyMinerals >= DUEL.extractorCost) {
+        this.enemyMinerals -= DUEL.extractorCost;
+        this.buildExtractor(this.enemyPools[0], false);
+      }
       return;
     }
     const slot = this.enemyShields.findIndex(
@@ -876,10 +1005,10 @@ export class DuelSystem extends createSystem({}) {
     }
     if (this.enemyTurrets.length < DUEL.turretMax && this.enemyMinerals >= DUEL.turretCost) {
       this.enemyMinerals -= DUEL.turretCost;
-      const spots = [[-0.95, DUEL.enemyZ + 0.5], [0.95, DUEL.enemyZ + 0.5], [0, DUEL.enemyZ - 0.1]];
+      const spots = [[-0.7, DUEL.enemyZ + 0.6], [0.7, DUEL.enemyZ + 0.6], [0, DUEL.enemyZ - 0.7]];
       const [x, z] = spots[this.enemyTurrets.length];
       const turret = this.buildTurret(false);
-      turret.group.position.set(x, 0.06, z);
+      turret.group.position.set(x, 0.02, z);
       const t = turret;
       t.target = {
         pos: turret.group.position,
@@ -904,6 +1033,12 @@ export class DuelSystem extends createSystem({}) {
     if (this.enemyMinerBots.length < DUEL.minerMax && this.enemyMinerals >= DUEL.minerCost) {
       this.enemyMinerals -= DUEL.minerCost;
       this.addEnemyMinerBot();
+      return;
+    }
+    // Flush: a second pump when everything else is bought.
+    if (aiExCount === 1 && this.enemyMinerBots.length >= 3 && this.enemyMinerals >= DUEL.extractorCost) {
+      this.enemyMinerals -= DUEL.extractorCost;
+      this.buildExtractor(this.enemyPools[1], false);
     }
   }
 
@@ -923,14 +1058,15 @@ export class DuelSystem extends createSystem({}) {
 
   private showShop(): void {
     const shields = this.myShields.filter(Boolean).length;
+    const pumps = this.extractors.filter((e) => e.mine).length;
     this.board.show(
       [
         {
-          id: 'juice',
-          title: 'JUICE',
-          blurb: 'Both pistols full, plus one reserve tank',
-          effectLine: `${DUEL.juiceCost} MINERALS`,
-          footnote: `RESERVE ${duel.tanks}`,
+          id: 'extractor',
+          title: 'EXTRACTOR',
+          blurb: 'Pumps the juice pool — one reserve tank per cycle',
+          effectLine: `${DUEL.extractorCost} MINERALS`,
+          footnote: `${pumps}/${DUEL.extractorMax} · RESERVE ${duel.tanks}`,
           color: '#f0299b',
           scale: 0.85,
         },
@@ -967,7 +1103,11 @@ export class DuelSystem extends createSystem({}) {
         distance: SHOP.boardDistance,
         perRow: 4,
         canPick: (id) => {
-          if (id === 'juice') return bank.drops >= DUEL.juiceCost;
+          if (id === 'extractor')
+            return (
+              bank.drops >= DUEL.extractorCost &&
+              this.extractors.filter((e) => e.mine).length < DUEL.extractorMax
+            );
           if (id === 'miner')
             return bank.drops >= DUEL.minerCost && this.miners.length < DUEL.minerMax;
           if (id === 'turret')
@@ -981,11 +1121,14 @@ export class DuelSystem extends createSystem({}) {
 
   /** Buy by id — cards land here; public for the dev hooks. */
   purchase(id: string): void {
-    if (id === 'juice') {
-      if (!spendDrops(DUEL.juiceCost)) return;
-      duel.tanks += 1;
-      this.world.getSystem(WeaponSystem)?.refillAll(1);
-      sfx.refund();
+    if (id === 'extractor') {
+      const pumps = this.extractors.filter((e) => e.mine).length;
+      if (pumps >= DUEL.extractorMax || !spendDrops(DUEL.extractorCost)) return;
+      sfx.buy();
+      // Builds straight onto the next free pool — the geyser IS the spot.
+      this.buildExtractor(this.myPools[pumps], true);
+      dropletBurst(_pos.copy(this.myPools[pumps]).setY(0.4), 12, 1.1);
+      sfx.placeTower();
       return;
     }
     if (id === 'miner') {
@@ -1017,6 +1160,8 @@ export class DuelSystem extends createSystem({}) {
       minerals: bank.drops,
       tanks: duel.tanks,
       miners: this.miners.length,
+      extractors: this.extractors.filter((e) => e.mine).length,
+      aiExtractors: this.extractors.filter((e) => !e.mine).length,
       turrets: this.myTurrets.length,
       shields: this.myShields.map((p) => (p ? Math.round(p.hp) : 0)),
       avatarHp: Math.round(this.avatarHp),
