@@ -24,6 +24,7 @@ import { resetTower, tower } from '../game/tower.js';
 import { resetBank } from '../game/shop.js';
 import { TurretSystem } from './TurretSystem.js';
 import { EnemySystem } from './EnemySystem.js';
+import { DuelSystem } from './DuelSystem.js';
 import * as sfx from '../audio/sfx.js';
 
 const _cam = new Vector3();
@@ -46,9 +47,13 @@ export class MenuSystem extends createSystem({}) {
   }
 
   /**
-   * Start (or restart) a run. If the tower is already planted (AGAIN after
-   * a wipe) we keep its spot and go straight to the fight; from the title
-   * we go to PLACING first — plant the tower, then the waves come.
+   * Start (or restart) a run in the CURRENT mode.
+   *
+   * DEFENSE: if the tower is already planted (AGAIN after a wipe) we keep
+   * its spot and go straight to the fight; from the title we go to PLACING
+   * first — plant the tower, then the waves come.
+   *
+   * DUEL: no tower — the decks appear and the match starts immediately.
    */
   startRun(): void {
     resetRun();
@@ -57,6 +62,12 @@ export class MenuSystem extends createSystem({}) {
     this.board.hide();
     this.plate.visible = false;
     this.shownFor = '';
+    if (app.mode === 'duel') {
+      app.phase = 'playing';
+      this.world.getSystem(DuelSystem)?.startMatch();
+      sfx.waveHorn();
+      return;
+    }
     if (tower.placed) {
       resetTower();
       app.phase = 'playing';
@@ -95,21 +106,33 @@ export class MenuSystem extends createSystem({}) {
     this.shownFor = 'title';
     this.drawPlate('title');
     this.plate.visible = true;
+    // Two games, one verb: shoot the mode you want.
     this.board.show(
       [
         {
-          id: 'start',
-          title: 'START',
-          blurb: 'Ten waves of THE THIRST. One tower of juice.',
+          id: 'defense',
+          title: 'DEFENSE',
+          blurb: 'Ten waves of THE THIRST. One tower of juice. Build the maze.',
           effectLine: 'JUICE UP!',
           color: '#f0299b',
-          scale: 1.25,
+          scale: 1.05,
+        },
+        {
+          id: 'duel',
+          title: 'DUEL',
+          blurb: 'One rival, two decks. Mine minerals, buy juice, soak them first.',
+          effectLine: '1 V 1',
+          color: '#63c4ff',
+          scale: 1.05,
         },
       ],
       {
         y: 1.15,
         distance: 2.1,
-        onPick: () => this.startRun(),
+        onPick: (id) => {
+          app.mode = id as 'defense' | 'duel';
+          this.startRun();
+        },
       },
     );
   }
@@ -123,7 +146,7 @@ export class MenuSystem extends createSystem({}) {
         {
           id: 'again',
           title: 'AGAIN',
-          blurb: 'Same spot, fresh reservoir',
+          blurb: app.mode === 'duel' ? 'Rematch — fresh decks' : 'Same spot, fresh reservoir',
           color: '#1fc4c9',
         },
         {
@@ -192,17 +215,34 @@ export class MenuSystem extends createSystem({}) {
       ctx.fillText('PULL TRIGGER — one ball per press, make them count', W / 2, 295);
       ctx.fillText('RELEASE GRIP — throw the gun; a fresh one respawns', W / 2, 352);
     } else {
-      ctx.fillStyle = '#e0312e';
+      const win = run.endReason === 'win';
+      ctx.fillStyle = win ? '#f0299b' : '#e0312e';
       ctx.font = '900 72px system-ui, -apple-system, sans-serif';
-      ctx.fillText(run.endReason === 'tower' ? 'TOWER DRAINED' : 'WIPED OUT', W / 2, 92);
+      ctx.fillText(
+        win ? 'SOAKED! YOU WIN' : run.endReason === 'tower' ? 'TOWER DRAINED' : 'WIPED OUT',
+        W / 2,
+        92,
+      );
       ctx.fillStyle = '#2b3a44';
       ctx.font = '800 52px system-ui, sans-serif';
-      ctx.fillText(`WAVE ${Math.max(1, run.wave)}`, W / 2 - 300, 210);
-      ctx.fillText(`${run.kills} POPS`, W / 2, 210);
-      ctx.fillText(`${run.score} PTS`, W / 2 + 300, 210);
+      if (app.mode === 'duel') {
+        ctx.fillText(`${run.score} PTS`, W / 2, 210);
+      } else {
+        ctx.fillText(`WAVE ${Math.max(1, run.wave)}`, W / 2 - 300, 210);
+        ctx.fillText(`${run.kills} POPS`, W / 2, 210);
+        ctx.fillText(`${run.score} PTS`, W / 2 + 300, 210);
+      }
       ctx.fillStyle = '#7c8a94';
       ctx.font = '700 36px system-ui, sans-serif';
-      ctx.fillText('the reservoir refills, THE THIRST regroups…', W / 2, 320);
+      ctx.fillText(
+        win
+          ? 'their deck drips. your crystals gleam.'
+          : app.mode === 'duel'
+            ? 'the rival tops up its tank and waits…'
+            : 'the reservoir refills, THE THIRST regroups…',
+        W / 2,
+        320,
+      );
     }
     this.plateTex.needsUpdate = true;
   }

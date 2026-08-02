@@ -31,6 +31,7 @@ import { requestBlast, squirtBlob } from '../combat/juiceBus.js';
 import { dropletBurst, stampSplat } from '../fx/juice.js';
 import { pulseHand } from '../input/haptics.js';
 import { heldAimQuat } from '../input/aim.js';
+import { claimTank } from '../game/duel.js';
 import { run, UpgradeId } from '../game/run.js';
 import { app } from '../game/appState.js';
 import { build, sinks } from '../game/shop.js';
@@ -222,7 +223,9 @@ export class WeaponSystem extends createSystem({
           const timer = (e.getValue(WaterPistol, 'timer') ?? 0) - delta;
           e.setValue(WaterPistol, 'timer', timer);
           if (timer <= 0) {
-            e.setValue(WaterPistol, 'ammo', 1);
+            // In a duel a fresh gun fills from your bought RESERVE — out of
+            // tanks it arrives with dregs. Elsewhere: always full.
+            e.setValue(WaterPistol, 'ammo', claimTank());
             e.setValue(WaterPistol, 'state', PistolState.Holstered);
             rig.liquid.slosh.reset();
             this.holsterPose(rig, hand, true); // snap — no lerp from the burst site
@@ -485,6 +488,15 @@ export class WeaponSystem extends createSystem({
       pulseHand(this.world.session, HANDS[hand], 0.4 + 0.25 * pull, 32);
     } else {
       e.setValue(WaterPistol, 'ticks', ticks);
+    }
+  }
+
+  /** Top up every pistol (both hips/hands) — the duel's JUICE purchase. */
+  refillAll(fraction = 1): void {
+    for (const e of this.queries.pistols.entities) {
+      const state = e.getValue(WaterPistol, 'state');
+      if (state === PistolState.Flying || state === PistolState.Respawning) continue;
+      e.setValue(WaterPistol, 'ammo', Math.max(e.getValue(WaterPistol, 'ammo') ?? 0, fraction));
     }
   }
 

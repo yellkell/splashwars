@@ -21,6 +21,7 @@ import { PlayerSystem } from './systems/PlayerSystem.js';
 import { MenuSystem } from './systems/MenuSystem.js';
 import { TowerSystem } from './systems/TowerSystem.js';
 import { TurretSystem } from './systems/TurretSystem.js';
+import { DuelSystem } from './systems/DuelSystem.js';
 import { run } from './game/run.js';
 import { app } from './game/appState.js';
 import { tower as towerState } from './game/tower.js';
@@ -68,6 +69,7 @@ World.create(container, {
   world.registerSystem(MenuSystem);
   world.registerSystem(TowerSystem);
   world.registerSystem(TurretSystem);
+  world.registerSystem(DuelSystem);
   world.registerSystem(WeaponSystem);
   world.registerSystem(JuiceSystem);
   world.registerSystem(PlayerSystem);
@@ -94,6 +96,12 @@ World.create(container, {
       },
       digits: () => debugLiveDigits(),
       startGame: () => world.getSystem(MenuSystem)?.startRun(),
+      startDuel: () => {
+        app.mode = 'duel';
+        world.getSystem(MenuSystem)?.startRun();
+      },
+      duelState: () => world.getSystem(DuelSystem)?.state(),
+      duelBuy: (id = 'juice') => world.getSystem(DuelSystem)?.purchase(id),
       placeTower: (x = 0, z = -1.5) =>
         world.getSystem(TowerSystem)?.place(new DebugVec3(x, 0, z)),
       towerState: () => ({

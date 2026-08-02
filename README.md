@@ -143,9 +143,28 @@ no models, no textures, no sounds shipped.
   the tower. The fight does not pause: shopping under pressure is the game.
   Turrets render from module-cached merged geometry and shared
   MeshStandard materials, so a maxed field stays a handful of draw calls.
+- **DUEL — the second mode** — a 1v1 economy fight, StarCraft in
+  miniature. Two floating decks face each other across a gap: yours has
+  three MINERAL CRYSTALS (blue, glassy, lit from inside), a depot bin,
+  four SHIELD SLOTS across the front edge and room for three turrets; the
+  rival machine's deck mirrors it. Shoot a crystal and minerals chip
+  straight off it — that's the bootstrap — then buy cantaloupe-plastic
+  MINER drones (orange flesh, pale rind hoops) that ferry loads
+  crystal→depot forever. Minerals buy JUICE, the second resource: it
+  fills both pistols on the spot and stocks the RESERVE that respawning
+  guns draw from — out of reserve, a fresh pistol arrives with dregs.
+  They also buy TURRETS (max 3, planted on your own deck, auto-lobbing at
+  the rival) and SHIELDS — Fortnite-style panels placed into the four
+  front slots (two top, two bottom) that soak incoming lobs until they
+  shatter. The rival runs the same books on the same price list, and its
+  purchases appear physically: panels you must crack, turrets you can
+  pop, miners bobbing between its crystals. Drain its shell before it
+  soaks you. The watch banks MINERALS, Y opens the duel shop, and the
+  whole thing shares the ball sim — its lobs are the same dodgeable juice
+  yours are.
 - **Menus you shoot** — the game has exactly one interaction verb. The
-  title screen is a HOW TO PLAY plate over a big START card: draw and shoot
-  it to begin. Losing brings a WIPED OUT / TOWER DRAINED plate (wave / pops
+  title screen is a HOW TO PLAY plate over two mode cards — DEFENSE and
+  DUEL: draw and shoot the game you want. Losing brings a WIPED OUT / TOWER DRAINED plate (wave / pops
   / score) with AGAIN and MENU cards. Between waves, three upgrade cards swing up and you
   **hose the one you want** — about three balls, well under a second. Heavy
   Juice (damage), Orbiters (vampire-survivors globes that grind anything

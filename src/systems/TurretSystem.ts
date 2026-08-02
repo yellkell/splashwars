@@ -101,7 +101,7 @@ function bake(geo: BufferGeometry, x: number, y: number, z: number, sx = 1, sy =
   );
 }
 
-interface TurretAssets {
+export interface TurretAssets {
   /** Static shell parts, pre-merged (competition white). */
   shell: BufferGeometry;
   /** Static accent parts, pre-merged (racing red / ice). */
@@ -189,6 +189,19 @@ function buildAssets(): Record<TurretKindId, TurretAssets> {
   };
 }
 
+/** Shared turret hardware for other systems — the duel reuses the
+ * Sprinkler body and the ghost materials rather than growing its own. */
+export function sharedTurretAssets(): {
+  assets: Record<TurretKindId, TurretAssets>;
+  matWhite: MeshStandardMaterial;
+  matRed: MeshStandardMaterial;
+  matGhost: MeshBasicMaterial;
+  matGhostBad: MeshBasicMaterial;
+} {
+  if (!assets) assets = buildAssets();
+  return { assets, matWhite, matRed, matGhost, matGhostBad };
+}
+
 interface TurretRig {
   kind: TurretKindId;
   group: Group;
@@ -205,6 +218,7 @@ export class TurretSystem extends createSystem({}) {
   private watchTex!: CanvasTexture;
   private watchAttached = false;
   private lastWatchValue = -1;
+  private lastWatchMode = '';
   private toggleWas = false;
   private lastPlacingShown: string | null = null;
   private triggerWas: [boolean, boolean] = [false, false];
@@ -240,6 +254,10 @@ export class TurretSystem extends createSystem({}) {
       build.placing = null;
     }
     if (app.phase !== 'playing') return;
+    // In a duel the watch still runs (it shows MINERALS), but the shop,
+    // build ghosts and turret brains here are defense-mode machinery —
+    // DuelSystem owns its own shop and hardware.
+    if (app.mode === 'duel') return;
 
     // --- Y on the watch wrist toggles the shop. ---
     const gp = this.input.xr.gamepads[HANDS[SHOP.toggleHand]];
@@ -261,7 +279,11 @@ export class TurretSystem extends createSystem({}) {
     }
     this.toggleWas = toggle;
 
-    if (build.placing) this.updatePlacing(build.placing);
+    // Duel placements ('shield'/'duelTurret') never reach here — the duel
+    // gate above returned — but the type still needs narrowing.
+    if (build.placing && build.placing !== 'shield' && build.placing !== 'duelTurret') {
+      this.updatePlacing(build.placing);
+    }
 
     // --- Drive the standing turrets. ---
     const enemies = this.world.getSystem(EnemySystem);
@@ -645,9 +667,14 @@ export class TurretSystem extends createSystem({}) {
     bank.shown += (bank.drops - bank.shown) * Math.min(1, delta * 6);
     if (Math.abs(bank.drops - bank.shown) < 0.6) bank.shown = bank.drops;
     const display = Math.round(bank.shown);
-    if (display !== this.lastWatchValue || build.placing !== this.lastPlacingShown) {
+    if (
+      display !== this.lastWatchValue ||
+      build.placing !== this.lastPlacingShown ||
+      app.mode !== this.lastWatchMode
+    ) {
       this.lastWatchValue = display;
       this.lastPlacingShown = build.placing;
+      this.lastWatchMode = app.mode;
       this.drawWatch(display);
     }
   }
@@ -672,7 +699,8 @@ export class TurretSystem extends createSystem({}) {
     ctx.font = '800 30px system-ui, sans-serif';
     ctx.textAlign = 'left';
     ctx.fillStyle = '#9fb0ba';
-    ctx.fillText('DROPS', 30, H / 2 - 18);
+    // The same watch banks whichever currency the mode runs on.
+    ctx.fillText(app.mode === 'duel' ? 'MINERALS' : 'DROPS', 30, H / 2 - 18);
     ctx.fillText(build.placing ? 'Y: CANCEL' : 'Y: SHOP', 30, H - 40);
     this.watchTex.needsUpdate = true;
   }

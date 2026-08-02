@@ -39,6 +39,7 @@ import { initDamageNumbers, popDamage, updateDamageNumbers } from '../fx/damageN
 import { ballDamage, damagePlayer, run, UpgradeId } from '../game/run.js';
 import { damageTower, tower } from '../game/tower.js';
 import { wallAt } from '../game/field.js';
+import { ballTargets } from '../combat/targets.js';
 import * as sfx from '../audio/sfx.js';
 import { AOE, ARENA_BOUNDS, ENEMY_SHOT, PISTOL, TOWER, WALL } from '../config.js';
 import { Quaternion } from 'three';
@@ -105,8 +106,18 @@ export class JuiceSystem extends createSystem({}) {
       let hit = false;
 
       if (hostile) {
+        // --- Their juice vs YOUR defences first (duel shields soak). ---
+        for (const t of ballTargets) {
+          if (!t.hitByHostile || !t.alive()) continue;
+          const r = t.radius + radius;
+          if (_pos.distanceToSquared(t.pos) <= r * r && t.onHit(ENEMY_SHOT.damagePlayer, _pos)) {
+            dropletBurst(_pos, 6, 0.9);
+            hit = true;
+            break;
+          }
+        }
         // --- Their juice vs your head… ---
-        if (_pos.distanceToSquared(_head) <= ENEMY_SHOT.hitRadius * ENEMY_SHOT.hitRadius) {
+        if (!hit && _pos.distanceToSquared(_head) <= ENEMY_SHOT.hitRadius * ENEMY_SHOT.hitRadius) {
           dropletBurst(_pos, 10, 1.1);
           if (damagePlayer(ENEMY_SHOT.damagePlayer)) sfx.playerDown();
           else sfx.playerHurt();
@@ -160,6 +171,20 @@ export class JuiceSystem extends createSystem({}) {
         if (!hit) {
           for (const board of activeBoards) {
             if (board.testHit(_pos, radius)) {
+              hit = true;
+              break;
+            }
+          }
+        }
+
+        // --- Your juice vs duel targets: crystals (mining!), the rival,
+        // its shields and turrets. ---
+        if (!hit) {
+          for (const t of ballTargets) {
+            if (t.hitByHostile || !t.alive()) continue;
+            const r = t.radius + radius;
+            if (_pos.distanceToSquared(t.pos) <= r * r && t.onHit(damage, _pos)) {
+              dropletBurst(_pos, 6, 0.9);
               hit = true;
               break;
             }

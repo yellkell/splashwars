@@ -15,6 +15,16 @@
 
 export type AppPhase = 'title' | 'placing' | 'playing' | 'gameover';
 
+/**
+ * Which game you're playing:
+ *  - 'defense' — the tower-defense mode: portal, waves, walls, the tower;
+ *  - 'duel'    — the 1v1 economy fight: mine minerals, buy juice/turrets/
+ *    shields, soak the rival before they soak you (systems/DuelSystem.ts).
+ * Chosen on the title screen; AGAIN keeps the mode, MENU returns to choose.
+ */
+export type AppMode = 'defense' | 'duel';
+
 export const app = {
   phase: 'title' as AppPhase,
+  mode: 'defense' as AppMode,
 };

@@ -214,9 +214,10 @@ export class EnemySystem extends createSystem({}) {
       this.portalGroup.scale.setScalar(s);
     }
 
-    // Outside a run there is nothing to direct — the menus own the stage.
-    // (resetFight/startFresh have already emptied the swarm.)
-    if (app.phase !== 'playing') {
+    // Outside a run — or outside DEFENSE mode entirely (the duel has no
+    // waves) — there is nothing to direct. The sign stays shared: the duel
+    // borrows setSign() for its own announcements.
+    if (app.phase !== 'playing' || app.mode !== 'defense') {
       pendingBlasts.length = 0;
       return;
     }

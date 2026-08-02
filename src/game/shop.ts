@@ -58,10 +58,12 @@ export interface PlacedTurret {
  * positions for the Chiller slow field. */
 export const placedTurrets: PlacedTurret[] = [];
 
-/** Build-mode state: non-null while a bought turret's or wall's ghost is
- * out ('wall' is the maze piece; everything else is a turret kind). */
+/** Build-mode state: non-null while a bought thing's ghost is out.
+ * Turret kinds and 'wall' belong to defense mode (TurretSystem);
+ * 'shield' and 'duelTurret' belong to the duel (DuelSystem). Weapon fire
+ * is suppressed whenever this is non-null — the trigger is PLACE. */
 export const build = {
-  placing: null as TurretKindId | 'wall' | null,
+  placing: null as TurretKindId | 'wall' | 'shield' | 'duelTurret' | null,
 };
 
 export function clearTurrets(): void {

@@ -192,6 +192,56 @@ export const WALL = {
   height: 0.72, // barrier height — drones refuse to cross it
 };
 
+/**
+ * DUEL — the 1v1 mode. You and a rival machine each hold a floating deck,
+ * facing each other across a gap. StarCraft in miniature:
+ *
+ *   MINERALS (blue, glassy, shot or mined) ─buy─▶ JUICE (fills pistols),
+ *   MINERS (cantaloupe drones that mine for you), TURRETS (max 3, on your
+ *   deck), SHIELDS (Fortnite-style panels in 4 slots across your front —
+ *   two top, two bottom — that soak incoming fire until they shatter).
+ *
+ * Win by draining the rival's shell; lose by getting soaked yourself.
+ */
+export const DUEL = {
+  platformW: 3.0,
+  platformD: 2.6,
+  enemyZ: -8, // centre of the rival's deck (yours is at the origin)
+
+  startMinerals: 40,
+  startTanks: 3, // pistol-tank reserve you begin with (throws draw on it)
+  /** Shooting a crystal chips minerals straight off it — the bootstrap. */
+  mineralsPerShot: 3,
+  crystalCapacity: 400, // minerals in each cluster before it runs dry
+
+  minerCost: 60,
+  minerMax: 4,
+  minerYield: 6, // minerals per delivered trip
+  minerLeg: 1.6, // seconds per travel leg (crystal↔depot)
+  minerDig: 1.2, // seconds nose-down in the crystal
+
+  juiceCost: 25, // instantly refills both pistols AND banks +1 reserve tank
+
+  turretCost: 100,
+  turretMax: 3,
+  turretRate: 0.55, // shots per second at the rival
+  turretMuzzleSpeed: 7.0,
+
+  shieldCost: 50,
+  shieldHp: 160,
+  shieldHitDamage: 40, // what one enemy lob takes off a panel
+
+  avatarHp: 700,
+  avatarShotInterval: 2.4, // seconds between rival lobs at you
+  enemyTurretInterval: 3.8,
+
+  // The rival's abstract economy: it "mines" income and shops on the same
+  // price list you do. Purchases show up on its deck so you can read them.
+  aiIncomeBase: 1.7, // minerals per second before miners
+  aiIncomePerMiner: 1.0,
+  aiShotsPerJuice: 14, // shots per juice purchase, mirroring your tank
+};
+
 /** Shared enemy shape constants. */
 export const ENEMY = {
   bobAmplitude: 0.07, // idle vertical bob

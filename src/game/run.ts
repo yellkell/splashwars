@@ -98,8 +98,8 @@ export interface RunState {
   wave: number;
   score: number;
   kills: number;
-  /** Why the run ended, for the game-over plate. */
-  endReason: 'player' | 'tower' | '';
+  /** Why the run ended, for the game-over plate ('win' = duel victory). */
+  endReason: 'player' | 'tower' | 'win' | '';
   stacks: Record<UpgradeIdT, number>;
 }
 
