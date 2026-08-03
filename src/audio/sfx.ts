@@ -222,16 +222,63 @@ export function gunBurst(): void {
 }
 
 /**
- * One shot — a round wet PLOP: the dip-and-swoop droplet body, a low pump
- * thump for weight, and the smallest lowpassed spit. Pitch wanders shot to
- * shot so full-auto reads as a BURBLING stream of fat droplets instead of
- * one chirp stamped on repeat.
+ * The RAPTOR's shot (also the plain hip pistols): a round wet PLOP with
+ * real chest behind it — the dip-and-swoop droplet body, a deep pump knock
+ * that lingers, and a chesty lowpassed spit. Pitch wanders shot to shot so
+ * full-auto reads as a BURBLING stream of fat droplets instead of one
+ * chirp stamped on repeat.
  */
 export function squirtShot(): void {
   const p = 0.9 + Math.random() * 0.22;
-  bloop(300 * p, 185 * p, 640 * p, 0.11, 0.34);
-  blip(130 * p, 55, 0.09, 0.2);
-  noiseBurst(520 * p, 0.9, 0.06, 0.09, 220);
+  bloop(300 * p, 185 * p, 640 * p, 0.11, 0.36);
+  blip(115 * p, 44, 0.13, 0.32); // the knock: deeper and longer than before
+  noiseBurst(420 * p, 1.1, 0.055, 0.13, 180);
+}
+
+/** WILDCAT pellet — a tiny quick PIT, higher and lighter than the Raptor,
+ * so the auto stream reads as pat-pat-pat rather than a hose. */
+export function wildcatShot(): void {
+  const p = 1.2 + Math.random() * 0.35;
+  bloop(430 * p, 300 * p, 780 * p, 0.055, 0.14);
+  blip(190 * p, 90, 0.05, 0.08);
+  noiseBurst(950 * p, 1.4, 0.028, 0.05, 420);
+}
+
+/**
+ * VIPER — the sniper round. A hard bright CRACK on the transient, a deep
+ * body dropping like a spring uncoiling, and a whip tail. Loud on purpose:
+ * three shots per tank means each one should feel like an event.
+ */
+export function viperShot(): void {
+  noiseBurst(3400, 0.7, 0.05, 0.5, 650);
+  blip(240, 42, 0.17, 0.44);
+  noiseBurst(1300, 0.9, 0.24, 0.11, 220);
+  bloop(520, 320, 900, 0.08, 0.12);
+}
+
+/**
+ * The Ellipse bend — a doppler-ish whistle that rises as the round banks
+ * and falls away down-range. Scaled by how hard the punch actually curved
+ * the shot, so a straight pull stays silent and a full swing HOWLS.
+ */
+export function ellipseBend(intensity = 1): void {
+  const c = ready();
+  if (!c) return;
+  const k = Math.min(1, Math.max(0, intensity));
+  if (k < 0.1) return;
+  const t = c.currentTime;
+  const o = c.createOscillator();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(430 + 140 * k, t);
+  o.frequency.exponentialRampToValueAtTime(880 + 320 * k, t + 0.14);
+  o.frequency.exponentialRampToValueAtTime(300, t + 0.42);
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.05 + 0.13 * k, t + 0.06);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.42);
+  o.connect(g).connect(c._master!);
+  o.start(t);
+  o.stop(t + 0.47);
 }
 
 /** The tower planting — a big chunky plastic KACHUNK and a settle glug. */

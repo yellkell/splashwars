@@ -132,6 +132,8 @@ export class WeaponSystem extends createSystem({
   private throws = new Map<Entity, ThrowState>();
   private grenadeStates = new Map<Entity, GrenadeState>();
   private shotCooldowns = new Map<Entity, number>();
+  /** 1 at the instant of a shot, decayed fast — drives the visual kick. */
+  private recoils = new Map<Entity, number>();
   private platformEntities = new Set<Entity>();
   private bossLoadoutActive = false;
   private stationHomes = Array.from({ length: LOADOUT_SLOT_COUNT }, () => new Vector3());
@@ -391,6 +393,19 @@ export class WeaponSystem extends createSystem({
     // ray pose can arrive a frame or two after the draw.
     heldAimQuat(this.world, hand, rig.group.quaternion);
 
+    // RECOIL: the barrel snaps up and the gun tucks into your palm, then
+    // eases back over ~0.15 s. Layered on top of the aim re-seat so the
+    // kick never fights the aim — it decorates it.
+    const recoil = this.recoils.get(e) ?? 0;
+    if (recoil > 0.002) {
+      rig.group.quaternion.multiply(_quat.setFromAxisAngle(_e.set(1, 0, 0), recoil * def.kick));
+      rig.group.position.set(0, 0, recoil * 0.028 * (0.5 + def.kick * 3));
+      this.recoils.set(e, recoil * Math.exp(-delta * 11));
+    } else if (recoil !== 0) {
+      rig.group.position.set(0, 0, 0);
+      this.recoils.set(e, 0);
+    }
+
     const pull = gp?.getButtonValue(InputComponent.Trigger) ?? 0;
     const pressed = gp?.getButtonPressed(InputComponent.Trigger) ?? false;
     const firing = pressed || pull > 0.25;
@@ -433,7 +448,7 @@ export class WeaponSystem extends createSystem({
         ammo = Math.max(0, ammo - drain);
         this.fireBlob(e, rig, hand, Math.max(pull, 0.5), motion.vel, def, 1);
         this.shotCooldowns.set(e, 1 / Math.max(0.1, def.fireRate));
-        sfx.squirtShot();
+        this.shotSound(def);
         this.clicked[hand] = false;
       } else if (!this.clicked[hand]) {
         // DRY: nothing comes out. No dribbled ball, barely any haptic — a
@@ -456,9 +471,9 @@ export class WeaponSystem extends createSystem({
         emit -= 1;
         ammo = Math.max(0, ammo - drain);
         this.fireBlob(e, rig, hand, Math.max(pull, 0.5), motion.vel, def, 1);
-        // Every auto ball gets its own pitch-wandering plop — the stream
+        // Every auto ball gets its own pitch-wandering voice — the stream
         // BURBLES over the low pump bed instead of hissing.
-        sfx.squirtShot();
+        this.shotSound(def);
       }
       e.setValue(WaterPistol, 'emit', emit);
       if (!this.squirting[hand]) {
@@ -815,7 +830,7 @@ export class WeaponSystem extends createSystem({
     const speed = def.muzzleSpeed * (0.78 + 0.22 * pull) * power;
     _spawnVel.copy(_dir).multiplyScalar(speed).addScaledVector(handVel, PISTOL.inheritVel);
     _curve.copy(handVel).addScaledVector(_dir, -handVel.dot(_dir));
-    if (_curve.length() > 2.2) _curve.setLength(2.2);
+    if (_curve.length() > 3.2) _curve.setLength(3.2);
     _curve.multiplyScalar(def.curveStrength);
     _blobProfile.radius = def.radius;
     _blobProfile.gravity = def.gravity;
@@ -823,14 +838,43 @@ export class WeaponSystem extends createSystem({
     _blobProfile.damageScale = def.damageScale;
     squirtBlob(_nozzle, _spawnVel, _blobProfile);
 
+    // An Ellipse round that actually caught your swing gets its whistle,
+    // scaled by how hard it is bending. A straight pull stays silent.
+    if (def.curveStrength > 0) sfx.ellipseBend(_curve.length() / 12);
+
+    // The gun kicks: muzzle rise + a pull into the palm, decayed in
+    // updateHeld. What makes each trigger pull read as a PROPER shot.
+    this.recoils.set(e, 1);
+
     const ticks = (e.getValue(WaterPistol, 'ticks') ?? 0) + 1;
     if (ticks >= PISTOL.hapticEvery) {
       e.setValue(WaterPistol, 'ticks', 0);
       // A fat ball leaving the barrel should PUNCH — the contrast with the
-      // near-silent dry press is what sells "loaded" versus "spent".
-      pulseHand(this.world.session, HANDS[hand], def.haptic * (0.8 + 0.2 * pull), PISTOL.fireHapticMs);
+      // near-silent dry press is what sells "loaded" versus "spent". Bigger
+      // tools thump both harder AND longer.
+      pulseHand(
+        this.world.session,
+        HANDS[hand],
+        def.haptic * (0.8 + 0.2 * pull),
+        Math.round(26 + 38 * def.haptic),
+      );
     } else {
       e.setValue(WaterPistol, 'ticks', ticks);
+    }
+  }
+
+  /** Each family speaks with its own voice — cadence alone isn't identity. */
+  private shotSound(def: ToolDefinition): void {
+    switch (def.family) {
+      case 'wildcat':
+        sfx.wildcatShot();
+        break;
+      case 'viper':
+        sfx.viperShot();
+        break;
+      default:
+        sfx.squirtShot();
+        break;
     }
   }
 
