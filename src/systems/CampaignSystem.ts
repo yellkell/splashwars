@@ -1,11 +1,15 @@
 /**
  * THE GREAT SPLASH campaign director.
  *
- * Normal map stops reuse Splash's tower, portal and instanced swarm. Boss
- * stops switch to a Blaston-sized pad and the real GOOPLIATH gel creature,
- * driven by the readable attack language from FIRE FIGHT: charged floor
- * zones, re-hits, marching slams, late-lock beams, crouch sweeps, volleys,
- * alternating half-pad floods and the final safe-wedge nova.
+ * EVERY stop — route fight or boss — is fought the same way: you stand on
+ * the Blaston-sized pad with your six chosen tools racked in sockets around
+ * its edge (no hip pistols, no tower), and the enemy comes to you. Route
+ * stops send Splash's instanced swarm through the portal; boss stops summon
+ * the real GOOPLIATH gel creature, driven by the readable attack language
+ * from FIRE FIGHT: charged floor zones, re-hits, marching slams, late-lock
+ * beams, crouch sweeps, volleys, alternating half-pad floods and the final
+ * safe-wedge nova. Route fights are rehearsal — the same geography of
+ * weapons under pressure, before the boss tests it.
  */
 
 import { createSystem, Vector3 } from '@iwsdk/core';
@@ -345,12 +349,26 @@ export class CampaignSystem extends createSystem({}) {
     tower.placed = false;
 
     // The pad appears underfoot for every stop, boss dressing off.
+    this.forward.copy(_forward);
+    this.right.set(-this.forward.z, 0, this.forward.x).normalize();
     this.arenaCenter.set(_head.x, 0, _head.z);
     this.arenaYaw = Math.atan2(-_forward.x, -_forward.z);
     this.arena.position.copy(this.arenaCenter);
     this.arena.rotation.y = this.arenaYaw;
     this.arena.visible = true;
     for (const d of this.bossDressing) d.visible = false;
+
+    // Route fights are rehearsal for the boss, so they're fought the same
+    // way: your six chosen tools stand in their sockets around the pad
+    // instead of two Raptors on your hips. Reach, draw, fire, throw the
+    // spent one away and grab the next — the loadout IS the ammo economy,
+    // and you learn its geography before GOOPLIATH tests it.
+    this.world.getSystem(WeaponSystem)?.activateBossLoadout(
+      this.arenaCenter,
+      this.forward,
+      this.right,
+      CAMPAIGN.padRadius,
+    );
 
     this.phase = 'swarm';
     this.world.getSystem(EnemySystem)?.startCampaignEncounter(spec);
