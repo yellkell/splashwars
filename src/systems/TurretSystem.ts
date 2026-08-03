@@ -254,10 +254,15 @@ export class TurretSystem extends createSystem({}) {
       build.placing = null;
     }
     if (app.phase !== 'playing') return;
-    // In a duel the watch still runs (it shows MINERALS), but the shop,
-    // build ghosts and turret brains here are defense-mode machinery —
-    // DuelSystem owns its own shop and hardware.
-    if (app.mode === 'duel') return;
+    // Only DEFENSE owns this shop. DUEL has its own economy; CAMPAIGN grows
+    // through its saved post-fight upgrade picks, so a temporary DROPS sink
+    // here would be a misleading power that vanished at the next map stop.
+    if (app.mode !== 'defense') {
+      if (this.board.active) this.board.hide();
+      this.hideGhost();
+      build.placing = null;
+      return;
+    }
 
     // --- Y on the watch wrist toggles the shop. ---
     const gp = this.input.xr.gamepads[HANDS[SHOP.toggleHand]];
@@ -664,6 +669,8 @@ export class TurretSystem extends createSystem({}) {
         this.watchAttached = true;
       }
     }
+
+    this.watch.visible = app.mode !== 'campaign';
 
     bank.shown += (bank.drops - bank.shown) * Math.min(1, delta * 6);
     if (Math.abs(bank.drops - bank.shown) < 0.6) bank.shown = bank.drops;

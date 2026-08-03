@@ -77,17 +77,24 @@ export class BlobPool {
    * Place slot `i` at `pos`, slightly stretched along `vel` — enough wobble
    * to read as liquid, not so much that a fat ball becomes a rope.
    */
-  place(i: number, pos: Vector3, vel: Vector3, hostile = false): void {
+  place(
+    i: number,
+    pos: Vector3,
+    vel: Vector3,
+    hostile = false,
+    radius = hostile ? ENEMY_SHOT.radius : PISTOL.blobRadius,
+    tint = 0,
+  ): void {
     const speed = vel.length();
     const stretch = 1 + Math.min(0.45, speed * 0.06);
     _dir.copy(vel).normalize();
     _q.setFromUnitVectors(_zAxis, _dir);
     // Enemy shots are a bit smaller than your fat rounds.
-    const size = hostile ? ENEMY_SHOT.radius / PISTOL.blobRadius : 1;
+    const size = radius / PISTOL.blobRadius;
     _s.set(size / Math.sqrt(stretch), size / Math.sqrt(stretch), size * stretch);
     _m.compose(pos, _q, _s);
     this.mesh.setMatrixAt(i, _m);
-    _c.set(hostile ? ENEMY_SHOT.tint : PALETTE.juice);
+    _c.set(tint || (hostile ? ENEMY_SHOT.tint : PALETTE.juice));
     this.mesh.setColorAt(i, _c);
     if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
   }

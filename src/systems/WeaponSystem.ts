@@ -24,20 +24,32 @@
  */
 
 import { createSystem, InputComponent, Quaternion, Vector3, type Entity } from '@iwsdk/core';
+import { Group, Mesh, MeshBasicMaterial, RingGeometry } from 'three';
 import { PistolState, WaterPistol } from '../components/WaterPistol.js';
 import { EnemySystem } from './EnemySystem.js';
 import { createWaterPistol, type WaterPistolRig } from '../weapons/waterPistol.js';
-import { requestBlast, squirtBlob } from '../combat/juiceBus.js';
+import { requestBlast, squirtBlob, type BlobProfile } from '../combat/juiceBus.js';
+import { ballTargets } from '../combat/targets.js';
 import { dropletBurst, stampSplat } from '../fx/juice.js';
 import { pulseHand } from '../input/haptics.js';
 import { heldAimQuat } from '../input/aim.js';
 import { claimTank } from '../game/duel.js';
 import { activeBoards, menuClick } from '../ui/cardBoard.js';
-import { run, UpgradeId } from '../game/run.js';
+import { ballDamage, run, UpgradeId } from '../game/run.js';
 import { app } from '../game/appState.js';
 import { build, sinks } from '../game/shop.js';
 import * as sfx from '../audio/sfx.js';
 import { AOE, AUTO, HOLSTER, PISTOL, SINK_TANK_BALLS_PER_LEVEL } from '../config.js';
+import {
+  LOADOUT_SLOT_COUNT,
+  LOADOUT_SLOT_POSITIONS,
+  ToolId,
+  loadout,
+  toolById,
+  toolByIndex,
+  toolIndex,
+  type ToolDefinition,
+} from '../game/loadout.js';
 
 const HANDS = ['left', 'right'] as const;
 type Hand = 0 | 1;
@@ -54,12 +66,24 @@ const _dir = new Vector3();
 const _vel = new Vector3();
 const _axis = new Vector3();
 const _spawnVel = new Vector3();
+const _curve = new Vector3();
+const _worldScale = new Vector3();
+const _worldPos = new Vector3();
+const _targetPoint = new Vector3();
 const _quat = new Quaternion();
 const _head = new Vector3();
 const _anchor = new Vector3();
 const _gripPos = new Vector3();
 const _e = new Vector3(); // scratch forward/ground vector
 const _near: number[] = [];
+const _minusZ = new Vector3(0, 0, -1);
+const _blobProfile: BlobProfile = {
+  radius: PISTOL.blobRadius,
+  gravity: PISTOL.gravity,
+  lifetime: PISTOL.lifetime,
+  damageScale: 1,
+  curve: _curve,
+};
 
 /** Per-hand world-space motion tracking for slosh + throw velocity. */
 class HandMotion {
@@ -95,12 +119,25 @@ class ThrowState {
   spin = 0;
 }
 
+interface GrenadeState {
+  armed: boolean;
+  fuse: number;
+}
+
 export class WeaponSystem extends createSystem({
   pistols: { required: [WaterPistol] },
 }) {
   private rigs = new Map<Entity, WaterPistolRig>();
-  private motion: [HandMotion, HandMotion] = [new HandMotion(), new HandMotion()];
-  private throws: [ThrowState, ThrowState] = [new ThrowState(), new ThrowState()];
+  private motions = new Map<Entity, HandMotion>();
+  private throws = new Map<Entity, ThrowState>();
+  private grenadeStates = new Map<Entity, GrenadeState>();
+  private shotCooldowns = new Map<Entity, number>();
+  private platformEntities = new Set<Entity>();
+  private bossLoadoutActive = false;
+  private stationHomes = Array.from({ length: LOADOUT_SLOT_COUNT }, () => new Vector3());
+  private stationRotations = Array.from({ length: LOADOUT_SLOT_COUNT }, () => new Quaternion());
+  private stationMarkers = new Group();
+  private stationRings: Mesh[] = [];
   private squeezeWas: [boolean, boolean] = [false, false];
   /** This frame's squeeze edges, sampled once for BOTH hands up front —
    * the catch check needs the hand a pistol does NOT belong to. */
@@ -114,14 +151,39 @@ export class WeaponSystem extends createSystem({
   private time = 0;
 
   init(): void {
+    const raptor = toolById(ToolId.Raptor);
     for (const hand of [0, 1] as const) {
-      const rig = createWaterPistol();
+      const rig = createWaterPistol(raptor);
       const e = this.world.createTransformEntity(rig.group, { persistent: true });
-      e.addComponent(WaterPistol, { hand, state: PistolState.Holstered });
+      e.addComponent(WaterPistol, {
+        hand,
+        homeHand: hand,
+        tool: toolIndex(raptor.id),
+        station: -1,
+        state: PistolState.Holstered,
+      });
       // Park at a plausible hip until the first head pose arrives.
       rig.group.position.set(hand === 0 ? -HOLSTER.lateral : HOLSTER.lateral, HOLSTER.height, 0);
       this.rigs.set(e, rig);
+      this.motions.set(e, new HandMotion());
+      this.throws.set(e, new ThrowState());
+      this.shotCooldowns.set(e, 0);
     }
+
+    // Six glowing pucks wait just outside the boss octagon. Their colours
+    // are updated from the saved spatial loadout whenever a boss starts.
+    for (let i = 0; i < LOADOUT_SLOT_COUNT; i++) {
+      const ring = new Mesh(
+        new RingGeometry(0.085, 0.135, 24),
+        new MeshBasicMaterial({ color: 0x5edbe6, transparent: true, opacity: 0.82, depthWrite: false }),
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 0.018;
+      this.stationMarkers.add(ring);
+      this.stationRings.push(ring);
+    }
+    this.stationMarkers.visible = false;
+    this.world.scene.add(this.stationMarkers);
   }
 
   update(delta: number): void {
@@ -138,25 +200,47 @@ export class WeaponSystem extends createSystem({
     }
     for (const e of this.queries.pistols.entities) {
       if ((e.getValue(WaterPistol, 'state') ?? 0) === PistolState.Held) {
-        this.heldNow[(e.getValue(WaterPistol, 'hand') ?? 0) as Hand] = true;
+        const heldHand = e.getValue(WaterPistol, 'hand') ?? -1;
+        if (heldHand === 0 || heldHand === 1) this.heldNow[heldHand] = true;
       }
     }
 
     for (const e of this.queries.pistols.entities) {
       const rig = this.rigs.get(e);
       if (!rig) continue;
-      const hand = (e.getValue(WaterPistol, 'hand') ?? 0) as Hand;
+      const station = e.getValue(WaterPistol, 'station') ?? -1;
+      const platformTool = station >= 0;
+      if (this.bossLoadoutActive && !platformTool) {
+        rig.group.visible = false;
+        continue;
+      }
+      const handValue = e.getValue(WaterPistol, 'hand') ?? -1;
+      const hand = (handValue === 1 ? 1 : 0) as Hand;
       const state = e.getValue(WaterPistol, 'state') ?? PistolState.Holstered;
+      const def = toolByIndex(e.getValue(WaterPistol, 'tool') ?? 0);
+
+      this.shotCooldowns.set(e, Math.max(0, (this.shotCooldowns.get(e) ?? 0) - delta));
+      const grenade = this.grenadeStates.get(e);
+      if (grenade?.armed && app.phase === 'playing') {
+        grenade.fuse -= delta;
+        if (grenade.fuse <= 0) {
+          this.detonateGrenade(e, rig, def);
+          continue;
+        }
+      }
 
       // --- Motion: the tank is what sloshes, so track ITS world point. ---
       rig.tankMarker.getWorldPosition(_tank);
-      const motion = this.motion[hand];
+      const motion = this.motions.get(e) ?? new HandMotion();
+      this.motions.set(e, motion);
       motion.update(_tank, delta);
 
-      const grip = this.world.playerSpaceEntities.gripSpaces[HANDS[hand]]?.object3D;
-      const gp = this.input.xr.gamepads[HANDS[hand]];
-      const squeezing = this.squeezeWas[hand];
-      const squeezeDown = this.squeezeDownNow[hand];
+      const grip = handValue === 0 || handValue === 1
+        ? this.world.playerSpaceEntities.gripSpaces[HANDS[hand]]?.object3D
+        : undefined;
+      const gp = handValue === 0 || handValue === 1 ? this.input.xr.gamepads[HANDS[hand]] : undefined;
+      const squeezing = handValue === 0 || handValue === 1 ? this.squeezeWas[hand] : false;
+      const squeezeDown = handValue === 0 || handValue === 1 ? this.squeezeDownNow[hand] : false;
 
       switch (state) {
         case PistolState.Holstered: {
@@ -178,20 +262,51 @@ export class WeaponSystem extends createSystem({
           break;
         }
 
+        case PistolState.Docked: {
+          this.dockPose(rig, station);
+          for (const h of [0, 1] as const) {
+            if (!this.squeezeDownNow[h] || this.heldNow[h]) continue;
+            const dockGrip = this.world.playerSpaceEntities.gripSpaces[HANDS[h]]?.object3D;
+            if (!dockGrip) continue;
+            dockGrip.getWorldPosition(_gripPos);
+            if (_gripPos.distanceTo(rig.group.position) > HOLSTER.drawRadius) continue;
+            dockGrip.add(rig.group);
+            rig.group.position.set(0, 0, 0);
+            heldAimQuat(this.world, h, rig.group.quaternion);
+            e.setValue(WaterPistol, 'hand', h);
+            e.setValue(WaterPistol, 'state', PistolState.Held);
+            this.heldNow[h] = true;
+            sfx.draw();
+            pulseHand(this.world.session, HANDS[h], 0.55, 55);
+            break;
+          }
+          break;
+        }
+
         case PistolState.Held: {
           if (!squeezing || !grip) {
             this.throwGun(e, rig, hand, motion);
             break;
           }
-          this.updateHeld(e, rig, hand, gp, motion, delta);
+          this.updateHeld(e, rig, hand, gp, motion, def, delta);
           break;
         }
 
         case PistolState.Flying: {
-          const t = this.throws[hand];
+          const t = this.throws.get(e) ?? new ThrowState();
+          this.throws.set(e, t);
           t.vel.y -= HOLSTER.throwGravity * delta;
           rig.group.position.addScaledVector(t.vel, delta);
           rig.group.rotateOnAxis(t.spinAxis, t.spin * delta);
+
+          if (def.kind === 'grenade' && rig.group.position.y <= 0.085) {
+            rig.group.position.y = 0.085;
+            if (Math.abs(t.vel.y) > 0.7) sfx.splat(0.45);
+            t.vel.y = Math.abs(t.vel.y) * 0.42;
+            t.vel.x *= 0.78;
+            t.vel.z *= 0.78;
+            t.spin *= 0.84;
+          }
 
           // THE CATCH: squeeze any EMPTY hand near a flying gun and it
           // snaps into that palm, ammo intact — snatch your own throw back
@@ -205,7 +320,7 @@ export class WeaponSystem extends createSystem({
             if (!grip2) continue;
             grip2.getWorldPosition(_gripPos);
             if (_gripPos.distanceTo(rig.group.position) > HOLSTER.catchRadius) continue;
-            if (h2 !== hand) this.swapHands(e, hand, h2);
+            if (!platformTool && h2 !== hand) this.swapHands(e, hand, h2);
             grip2.add(rig.group);
             rig.group.position.set(0, 0, 0);
             heldAimQuat(this.world, h2, rig.group.quaternion);
@@ -216,7 +331,7 @@ export class WeaponSystem extends createSystem({
             caught = true;
             break;
           }
-          if (!caught) this.checkThrowImpact(e, rig);
+          if (!caught && def.kind === 'gun') this.checkThrowImpact(e, rig, def);
           break;
         }
 
@@ -226,10 +341,17 @@ export class WeaponSystem extends createSystem({
           if (timer <= 0) {
             // In a duel a fresh gun fills from your bought RESERVE — out of
             // tanks it arrives with dregs. Elsewhere: always full.
-            e.setValue(WaterPistol, 'ammo', claimTank());
-            e.setValue(WaterPistol, 'state', PistolState.Holstered);
+            e.setValue(WaterPistol, 'ammo', platformTool ? 1 : claimTank());
+            e.setValue(WaterPistol, 'hand', platformTool ? -1 : e.getValue(WaterPistol, 'homeHand') ?? hand);
+            e.setValue(WaterPistol, 'state', platformTool ? PistolState.Docked : PistolState.Holstered);
+            const grenadeState = this.grenadeStates.get(e);
+            if (grenadeState) {
+              grenadeState.armed = false;
+              grenadeState.fuse = 0;
+            }
             rig.liquid.slosh.reset();
-            this.holsterPose(rig, hand, true); // snap — no lerp from the burst site
+            if (platformTool) this.dockPose(rig, station, true);
+            else this.holsterPose(rig, hand, true); // snap — no lerp from the burst site
             rig.group.visible = true;
             sfx.draw();
           }
@@ -241,10 +363,12 @@ export class WeaponSystem extends createSystem({
       if (rig.group.visible) {
         const ammo = e.getValue(WaterPistol, 'ammo') ?? 1;
         rig.tankMarker.getWorldQuaternion(_quat);
+        rig.tankMarker.getWorldScale(_worldScale);
         _axis.set(0, 0, 1).applyQuaternion(_quat);
+        const visualScale = Math.max(_worldScale.x, _worldScale.y, _worldScale.z);
         const worldHeight =
-          rig.tankInnerRadius * 2 +
-          (rig.tankInnerLength - rig.tankInnerRadius * 2) * Math.abs(_axis.y);
+          (rig.tankInnerRadius * 2 +
+            (rig.tankInnerLength - rig.tankInnerRadius * 2) * Math.abs(_axis.y)) * visualScale;
         rig.tankMarker.getWorldPosition(_tank);
         rig.liquid.update(this.time, delta, ammo, _tank, worldHeight, motion.accel);
       }
@@ -259,6 +383,7 @@ export class WeaponSystem extends createSystem({
     hand: Hand,
     gp: GamepadLike | undefined,
     motion: HandMotion,
+    def: ToolDefinition,
     delta: number,
   ): void {
     // Re-seat the barrel on the aim axis every frame: with hand tracking
@@ -280,20 +405,34 @@ export class WeaponSystem extends createSystem({
       return;
     }
 
+    if (def.kind === 'grenade') {
+      const grenade = this.grenadeStates.get(e) ?? { armed: false, fuse: 0 };
+      this.grenadeStates.set(e, grenade);
+      if (firingDown && !grenade.armed) {
+        grenade.armed = true;
+        grenade.fuse = def.fuse ?? 1.7;
+        rig.setTriggerPull(1);
+        sfx.gooCharge(Math.min(0.8, grenade.fuse));
+        pulseHand(this.world.session, HANDS[hand], def.haptic, 80);
+      }
+      return;
+    }
+
     let ammo = e.getValue(WaterPistol, 'ammo') ?? 1;
     // BIG TANKS levels stretch every tank without touching the visuals —
     // the same full reservoir just holds more shots.
-    const drain = 1 / (PISTOL.shotsPerTank + sinks.tanks * SINK_TANK_BALLS_PER_LEVEL);
+    const drain = 1 / (def.shots + sinks.tanks * SINK_TANK_BALLS_PER_LEVEL);
     // Anything under half a swig is empty: float dust in the tank must not
     // buy a token last squirt that reads as a second, feeble shot.
     const hasShot = ammo >= drain * 0.5;
     const autoStacks = run.stacks[UpgradeId.AutoFire];
 
     // --- SEMI-AUTO: exactly one ball per trigger press, instantly. ---
-    if (firingDown) {
+    if (firingDown && (this.shotCooldowns.get(e) ?? 0) <= 0) {
       if (hasShot) {
         ammo = Math.max(0, ammo - drain);
-        this.fireBlob(e, rig, hand, Math.max(pull, 0.5), motion.vel, 1);
+        this.fireBlob(e, rig, hand, Math.max(pull, 0.5), motion.vel, def, 1);
+        this.shotCooldowns.set(e, 1 / Math.max(0.1, def.fireRate));
         sfx.squirtShot();
         this.clicked[hand] = false;
       } else if (!this.clicked[hand]) {
@@ -306,14 +445,17 @@ export class WeaponSystem extends createSystem({
         this.clicked[hand] = true;
       }
       e.setValue(WaterPistol, 'emit', 0);
-    } else if (firing && autoStacks > 0 && hasShot) {
-      // --- AUTO SOAKER: hold to fire; stacks crank the cadence. ---
-      const rate = AUTO.rate * Math.pow(AUTO.ratePerStack, autoStacks - 1);
+    } else if (firing && (def.automatic || autoStacks > 0) && hasShot) {
+      // Wildcat is intrinsically automatic. AUTO SOAKER extends the same
+      // hold-to-fire grammar to the other guns without erasing their cadence.
+      const baseRate = def.automatic ? def.fireRate : Math.min(def.fireRate, AUTO.rate);
+      const rateStacks = def.automatic ? autoStacks : Math.max(0, autoStacks - 1);
+      const rate = baseRate * Math.pow(AUTO.ratePerStack, rateStacks);
       let emit = (e.getValue(WaterPistol, 'emit') ?? 0) + rate * delta;
       while (emit >= 1 && ammo >= drain * 0.5) {
         emit -= 1;
         ammo = Math.max(0, ammo - drain);
-        this.fireBlob(e, rig, hand, Math.max(pull, 0.5), motion.vel, 1);
+        this.fireBlob(e, rig, hand, Math.max(pull, 0.5), motion.vel, def, 1);
         // Every auto ball gets its own pitch-wandering plop — the stream
         // BURBLES over the low pump bed instead of hissing.
         sfx.squirtShot();
@@ -328,7 +470,7 @@ export class WeaponSystem extends createSystem({
       this.stopSquirt(hand);
     }
     if (!firing) this.clicked[hand] = false;
-    if (!(firing && autoStacks > 0 && ammo >= drain * 0.5)) this.stopSquirt(hand);
+    if (!(firing && (def.automatic || autoStacks > 0) && ammo >= drain * 0.5)) this.stopSquirt(hand);
 
     e.setValue(WaterPistol, 'ammo', ammo);
   }
@@ -337,23 +479,19 @@ export class WeaponSystem extends createSystem({
    * A cross-catch trades the two pistols' owners: the caught gun joins the
    * catching hand, and the spare (holstered, flying or respawning — never
    * held, or the hand couldn't catch) is re-tagged to the vacated hand, so
-   * its next holster pose lands on that hip. The per-hand flight/motion
-   * trackers swap with them so a still-flying spare keeps its trajectory.
+   * its next holster pose lands on that hip. Motion is tracked per tool, so
+   * a platform hand may throw one weapon and immediately reach for another.
    */
   private swapHands(flying: Entity, from: Hand, to: Hand): void {
     for (const other of this.queries.pistols.entities) {
       if (other === flying) continue;
       if (((other.getValue(WaterPistol, 'hand') ?? 0) as Hand) !== to) continue;
       other.setValue(WaterPistol, 'hand', from);
+      other.setValue(WaterPistol, 'homeHand', from);
       break;
     }
     flying.setValue(WaterPistol, 'hand', to);
-    const t = this.throws[from];
-    this.throws[from] = this.throws[to];
-    this.throws[to] = t;
-    const m = this.motion[from];
-    this.motion[from] = this.motion[to];
-    this.motion[to] = m;
+    flying.setValue(WaterPistol, 'homeHand', to);
   }
 
   // --- Throw / impact / respawn. ------------------------------------------
@@ -361,7 +499,8 @@ export class WeaponSystem extends createSystem({
   private throwGun(e: Entity, rig: WaterPistolRig, hand: Hand, motion: HandMotion): void {
     // Detach keeping the world pose, then hand it its launch velocity.
     this.world.scene.attach(rig.group);
-    const t = this.throws[hand];
+    const t = this.throws.get(e) ?? new ThrowState();
+    this.throws.set(e, t);
     t.vel.copy(motion.vel).multiplyScalar(HOLSTER.throwBoost);
     if (t.vel.length() < HOLSTER.minThrowSpeed) {
       // A limp release still tumbles clear rather than hovering mid-air.
@@ -371,6 +510,15 @@ export class WeaponSystem extends createSystem({
     t.spinAxis.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
     t.spin = HOLSTER.throwSpin * (0.6 + Math.random() * 0.8);
     e.setValue(WaterPistol, 'state', PistolState.Flying);
+    const def = toolByIndex(e.getValue(WaterPistol, 'tool') ?? 0);
+    if (def.kind === 'grenade') {
+      const grenade = this.grenadeStates.get(e) ?? { armed: false, fuse: 0 };
+      if (!grenade.armed) {
+        grenade.armed = true;
+        grenade.fuse = def.fuse ?? 1.7;
+      }
+      this.grenadeStates.set(e, grenade);
+    }
     rig.setTriggerPull(0);
     this.firingWas[hand] = false;
     this.stopSquirt(hand);
@@ -379,7 +527,7 @@ export class WeaponSystem extends createSystem({
   }
 
   /** Floor or enemy contact for a flying gun. Returns true if it burst. */
-  private checkThrowImpact(e: Entity, rig: WaterPistolRig): boolean {
+  private checkThrowImpact(e: Entity, rig: WaterPistolRig, def: ToolDefinition): boolean {
     const pos = rig.group.position;
     const ammo = e.getValue(WaterPistol, 'ammo') ?? 0;
     const enemies = this.world.getSystem(EnemySystem);
@@ -397,24 +545,43 @@ export class WeaponSystem extends createSystem({
         const r = swarm.radius[j] + HOLSTER.hitRadius;
         if (dx * dx + dy * dy + dz * dz <= r * r) {
           enemies!.hit(j, HOLSTER.throwDamage * (0.5 + ammo), true);
-          this.burst(e, rig, pos, ammo, 1.6);
+          this.burst(e, rig, pos, ammo, 1.6, def);
           return true;
         }
       }
+    }
+
+    // Non-swarm combatants use the shared target registry: most importantly
+    // GOOPLIATH, so Splash's signature throw-the-magazine reload remains a
+    // real offensive choice in boss fights instead of passing through him.
+    for (const target of ballTargets) {
+      if (target.hitByHostile || !target.alive()) continue;
+      const r = target.radius + HOLSTER.hitRadius;
+      if (pos.distanceToSquared(target.pos) > r * r) continue;
+      if (!target.onHit(HOLSTER.throwDamage * (0.5 + ammo), pos)) continue;
+      this.burst(e, rig, pos, ammo, 1.8, def);
+      return true;
     }
 
     // The floor — the gun shatters into juice the moment it lands.
     if (pos.y <= 0.05) {
       _e.set(pos.x, 0, pos.z);
       stampSplat(_e, 0.22 + ammo * 0.18);
-      this.burst(e, rig, pos, ammo, 1.1);
+      this.burst(e, rig, pos, ammo, 1.1, def);
       return true;
     }
     return false;
   }
 
   /** The gun disappears in a juice burst; a fresh one is due on the hip. */
-  private burst(e: Entity, rig: WaterPistolRig, pos: Vector3, ammo: number, punch: number): void {
+  private burst(
+    e: Entity,
+    rig: WaterPistolRig,
+    pos: Vector3,
+    ammo: number,
+    punch: number,
+    def: ToolDefinition,
+  ): void {
     // JUICE BOMB: with the upgrade, a thrown gun detonates in a wave of
     // juice that guts whatever is packed around it.
     const blastStacks = run.stacks[UpgradeId.ThrowBlast];
@@ -431,7 +598,7 @@ export class WeaponSystem extends createSystem({
     rig.group.visible = false;
     this.world.scene.attach(rig.group); // make sure it's not under a grip
     e.setValue(WaterPistol, 'state', PistolState.Respawning);
-    e.setValue(WaterPistol, 'timer', HOLSTER.respawnDelay);
+    e.setValue(WaterPistol, 'timer', (e.getValue(WaterPistol, 'station') ?? -1) >= 0 ? def.respawn : HOLSTER.respawnDelay);
   }
 
   // --- The hip anchor. -----------------------------------------------------
@@ -465,6 +632,164 @@ export class WeaponSystem extends createSystem({
     }
   }
 
+  /** Place one saved tool back in its exact octagon socket. */
+  private dockPose(rig: WaterPistolRig, station: number, snap = false): void {
+    const home = this.stationHomes[station];
+    const rotation = this.stationRotations[station];
+    if (!home || !rotation) return;
+    if (snap) {
+      rig.group.position.copy(home);
+      rig.group.quaternion.copy(rotation);
+    } else {
+      rig.group.position.lerp(home, 0.28);
+      rig.group.quaternion.slerp(rotation, 0.24);
+    }
+  }
+
+  /**
+   * Swap the two hip Raptors for the player's six spatial loadout tools.
+   * CampaignSystem supplies the arena basis so the sockets rotate with the
+   * room and stay on the same six sides shown in the editor.
+   */
+  activateBossLoadout(center: Vector3, forward: Vector3, right: Vector3, padRadius: number): void {
+    this.deactivateBossLoadout();
+    this.bossLoadoutActive = true;
+
+    // Put both ordinary pistols away even if one was still being held when
+    // the previous encounter ended.
+    for (const e of this.queries.pistols.entities) {
+      if ((e.getValue(WaterPistol, 'station') ?? -1) >= 0) continue;
+      const rig = this.rigs.get(e);
+      if (!rig) continue;
+      this.world.scene.attach(rig.group);
+      const homeHand = (e.getValue(WaterPistol, 'homeHand') ?? 0) as Hand;
+      e.setValue(WaterPistol, 'hand', homeHand);
+      e.setValue(WaterPistol, 'state', PistolState.Holstered);
+      rig.group.visible = false;
+    }
+
+    for (let slot = 0; slot < LOADOUT_SLOT_COUNT; slot++) {
+      const [sx, sz] = LOADOUT_SLOT_POSITIONS[slot];
+      const home = this.stationHomes[slot];
+      home.copy(center)
+        .addScaledVector(right, sx * (padRadius + 0.11))
+        .addScaledVector(forward, sz * padRadius)
+        .setY(0.78);
+      _dir.copy(center).sub(home).setY(0);
+      if (_dir.lengthSq() < 1e-4) _dir.copy(forward);
+      _dir.normalize();
+      this.stationRotations[slot].setFromUnitVectors(_minusZ, _dir);
+
+      const marker = this.stationRings[slot];
+      marker.position.set(home.x, 0.018, home.z);
+      const def = toolById(loadout.slots[slot]);
+      (marker.material as MeshBasicMaterial).color.set(def.color);
+
+      const rig = createWaterPistol(def);
+      const e = this.world.createTransformEntity(rig.group, { persistent: true });
+      e.addComponent(WaterPistol, {
+        hand: -1,
+        homeHand: -1,
+        tool: toolIndex(def.id),
+        station: slot,
+        state: PistolState.Docked,
+        ammo: 1,
+      });
+      this.rigs.set(e, rig);
+      this.motions.set(e, new HandMotion());
+      this.throws.set(e, new ThrowState());
+      this.shotCooldowns.set(e, 0);
+      if (def.kind === 'grenade') this.grenadeStates.set(e, { armed: false, fuse: 0 });
+      this.platformEntities.add(e);
+      this.dockPose(rig, slot, true);
+    }
+    this.stationMarkers.visible = true;
+  }
+
+  /** Tear down boss sockets and restore the ordinary left/right hip loop. */
+  deactivateBossLoadout(): void {
+    const wasActive = this.bossLoadoutActive || this.platformEntities.size > 0;
+    this.bossLoadoutActive = false;
+    this.stationMarkers.visible = false;
+
+    for (const e of this.platformEntities) {
+      const rig = this.rigs.get(e);
+      if (rig) this.world.scene.attach(rig.group);
+      e.dispose();
+      this.rigs.delete(e);
+      this.motions.delete(e);
+      this.throws.delete(e);
+      this.grenadeStates.delete(e);
+      this.shotCooldowns.delete(e);
+    }
+    this.platformEntities.clear();
+    if (!wasActive) return;
+
+    for (const e of this.queries.pistols.entities) {
+      if ((e.getValue(WaterPistol, 'station') ?? -1) >= 0) continue;
+      const rig = this.rigs.get(e);
+      if (!rig) continue;
+      this.world.scene.attach(rig.group);
+      const homeHand = (e.getValue(WaterPistol, 'homeHand') ?? 0) as Hand;
+      e.setValue(WaterPistol, 'hand', homeHand);
+      e.setValue(WaterPistol, 'state', PistolState.Holstered);
+      e.setValue(WaterPistol, 'ammo', 1);
+      rig.group.visible = true;
+      this.holsterPose(rig, homeHand, true);
+    }
+  }
+
+  private detonateGrenade(e: Entity, rig: WaterPistolRig, def: ToolDefinition): void {
+    rig.group.getWorldPosition(_worldPos);
+    this.world.scene.attach(rig.group);
+    const radius = def.blastRadius ?? 0.8;
+    const damage = ballDamage() * (def.blastDamageScale ?? 2);
+    requestBlast(_worldPos, radius, damage, true);
+
+    // Area requests are swarm-owned; the boss and duel hardware live in the
+    // shared target registry, so resolve those here at the same blast point.
+    for (const target of ballTargets) {
+      if (target.hitByHostile || !target.alive()) continue;
+      const r = radius + target.radius;
+      if (_worldPos.distanceToSquared(target.pos) > r * r) continue;
+      _targetPoint.copy(target.pos);
+      target.onHit(damage, _targetPoint);
+    }
+
+    if (def.id === ToolId.ClusterGrenade) {
+      const wildcat = toolById(ToolId.Wildcat);
+      const count = def.clusterPellets ?? 16;
+      _blobProfile.radius = wildcat.radius;
+      _blobProfile.gravity = wildcat.gravity;
+      _blobProfile.lifetime = wildcat.lifetime;
+      _blobProfile.damageScale = wildcat.damageScale * 1.2;
+      _curve.set(0, 0, 0);
+      for (let i = 0; i < count; i++) {
+        const a = (i / count) * Math.PI * 2 + (i % 2) * 0.12;
+        const speed = 4.6 + (i % 3) * 0.55;
+        _spawnVel.set(Math.cos(a) * speed, 0.75 + (i % 4) * 0.34, Math.sin(a) * speed);
+        squirtBlob(_worldPos, _spawnVel, _blobProfile);
+      }
+    }
+
+    stampSplat(_e.set(_worldPos.x, 0, _worldPos.z), radius * 0.62);
+    dropletBurst(_worldPos, def.id === ToolId.ClusterGrenade ? 52 : 64, 2.7);
+    sfx.juiceBomb();
+    const grenade = this.grenadeStates.get(e);
+    if (grenade) {
+      grenade.armed = false;
+      grenade.fuse = 0;
+    }
+    const handValue = e.getValue(WaterPistol, 'hand') ?? -1;
+    if (handValue === 0 || handValue === 1) {
+      this.firingWas[handValue] = false;
+      this.stopSquirt(handValue);
+    }
+    rig.group.visible = false;
+    e.setValue(WaterPistol, 'state', PistolState.Respawning);
+    e.setValue(WaterPistol, 'timer', def.respawn);
+  }
+
   // --- One juice ball. -----------------------------------------------------
 
   /** Squirt one ball from the nozzle. `power` scales speed (sputter < 1). */
@@ -474,6 +799,7 @@ export class WeaponSystem extends createSystem({
     hand: Hand,
     pull: number,
     handVel: Vector3,
+    def: ToolDefinition,
     power: number,
   ): void {
     rig.nozzle.getWorldPosition(_nozzle);
@@ -481,21 +807,28 @@ export class WeaponSystem extends createSystem({
     _dir.negate(); // getWorldDirection returns +Z; the muzzle faces -Z
 
     // Cone spread — a lob, not a laser.
-    _dir.x += (Math.random() - 0.5) * 2 * PISTOL.spread;
-    _dir.y += (Math.random() - 0.5) * 2 * PISTOL.spread;
-    _dir.z += (Math.random() - 0.5) * 2 * PISTOL.spread;
+    _dir.x += (Math.random() - 0.5) * 2 * def.spread;
+    _dir.y += (Math.random() - 0.5) * 2 * def.spread;
+    _dir.z += (Math.random() - 0.5) * 2 * def.spread;
     _dir.normalize();
 
-    const speed = PISTOL.muzzleSpeed * (0.78 + 0.22 * pull) * power;
+    const speed = def.muzzleSpeed * (0.78 + 0.22 * pull) * power;
     _spawnVel.copy(_dir).multiplyScalar(speed).addScaledVector(handVel, PISTOL.inheritVel);
-    squirtBlob(_nozzle, _spawnVel);
+    _curve.copy(handVel).addScaledVector(_dir, -handVel.dot(_dir));
+    if (_curve.length() > 2.2) _curve.setLength(2.2);
+    _curve.multiplyScalar(def.curveStrength);
+    _blobProfile.radius = def.radius;
+    _blobProfile.gravity = def.gravity;
+    _blobProfile.lifetime = def.lifetime;
+    _blobProfile.damageScale = def.damageScale;
+    squirtBlob(_nozzle, _spawnVel, _blobProfile);
 
     const ticks = (e.getValue(WaterPistol, 'ticks') ?? 0) + 1;
     if (ticks >= PISTOL.hapticEvery) {
       e.setValue(WaterPistol, 'ticks', 0);
       // A fat ball leaving the barrel should PUNCH — the contrast with the
       // near-silent dry press is what sells "loaded" versus "spent".
-      pulseHand(this.world.session, HANDS[hand], PISTOL.fireHaptic * (0.8 + 0.2 * pull), PISTOL.fireHapticMs);
+      pulseHand(this.world.session, HANDS[hand], def.haptic * (0.8 + 0.2 * pull), PISTOL.fireHapticMs);
     } else {
       e.setValue(WaterPistol, 'ticks', ticks);
     }

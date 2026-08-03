@@ -29,7 +29,7 @@ import {
   RingGeometry,
   Group,
 } from 'three';
-import { activeBoards, menuClick, type CardBoard } from '../ui/cardBoard.js';
+import { activeBoards, menuClick, type PointerBoard } from '../ui/cardBoard.js';
 import { handAimRay } from '../input/aim.js';
 import { pulseHand } from '../input/haptics.js';
 import { PALETTE, UPGRADES } from '../config.js';
@@ -58,7 +58,7 @@ interface HandPointer {
 export class PointerSystem extends createSystem({}) {
   private pointers: HandPointer[] = [];
   /** Which board+card each hand is over, for hover bookkeeping. */
-  private hoverBoard: CardBoard | null = null;
+  private hoverBoard: PointerBoard | null = null;
 
   init(): void {
     for (let hand = 0; hand < 2; hand++) {
@@ -121,7 +121,7 @@ export class PointerSystem extends createSystem({}) {
     }
 
     // Find the best hit across both hands and every open board.
-    let bestBoard: CardBoard | null = null;
+    let bestBoard: PointerBoard | null = null;
     let bestIndex = -1;
     let bestDist = Infinity;
     let bestHand = -1;

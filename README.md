@@ -176,6 +176,40 @@ no models, no textures, no sounds shipped.
   its shell before it soaks you — losing a duel is called getting
   SLIMED, and the plate says so. The watch banks MINERALS, Y opens the
   duel shop, and its lobs are the same dodgeable juice yours are.
+- **CAMPAIGN — THE GREAT SPLASH** — a saved world-map journey through
+  five districts and fifteen stops. Each district has two authored swarm
+  fights that escalate the local roster, followed by a new form of
+  **GOOPLIATH**. First clears pay one of the same three-card upgrades as
+  DEFENSE; those stacks are saved with the route and carried into every
+  later fight, so the campaign builds one increasingly ridiculous loadout
+  instead of resetting at each node. The five Goopliath bouts add attacks
+  cumulatively: the next form always retains everything the player has
+  learned, through re-hit/marching slams, counted volleys, crouch sweeps,
+  late-lock beams, alternating half-pad floods and the final safe-wedge nova.
+  They share one raymarched gel creature but not one look: **The Puddle** is
+  squat mint bubbling gel; **The Current** is a lanky blue streamed form;
+  **The Pressure** is compressed, top-heavy violet; **The Flood** is a broad
+  asymmetric pink wave; and the final toxic-lime **Goopliath** rises into a
+  crown with orange branching veins. Their eyes, splats, arena pool, HUD and
+  attack accents inherit that form's palette, while the danger ramp stays
+  universally amber-to-red. Liquid echo rings, beam lock cores, wet sweep
+  beads, visible safe-zone flow and hovering volley seeds make the attacks
+  read as different kinds of goop rather than generic warning decals. The
+  deformation sim, eyes, dents, splats and body choreography are vendored
+  from FIRE FIGHT's latest campaign build and adapted to Splash's wet foley.
+  Boss fights raise an octagonal Blaston-sized pad in passthrough; ordinary
+  stops return to the tower, portal and instanced swarm.
+- **Six-tool boss loadout** — LOADOUT on the main menu opens a top-down
+  drawing of that same octagonal pad. Six numbered sockets run down its two
+  side edges; pick a socket, then pick any tool, with duplicates completely
+  legal. The saved arrangement is reproduced physically just outside the
+  live boss pad, where you move, reach and squeeze to grab each weapon.
+  The current pistol is the **Raptor**. **Wildcat** fires a long-lived storm
+  of tiny low-damage pellets; **Viper** carries three tiny, fast, heavy sniper
+  rounds. Raptor Ellipse and Viper Ellipse continuously bend each shot from
+  the sideways velocity of the firing punch. Splash Grenade is one heavy
+  paint blast; Cluster Grenade scatters a halo of long-lived Wildcat paint.
+  Each socket cools down and respawns its own tool after it is thrown.
 - **Menus you point at** — whenever a board is up, a slim beam leaves
   your hand down the same aim axis the barrel uses, a cursor lands on the
   card under it, and the trigger clicks. Hovered cards brighten and lift
@@ -183,14 +217,15 @@ no models, no textures, no sounds shipped.
   a click. Menus used to be picked by HOSING them with juice, which cost
   you half a tank per choice and made you draw a gun to answer a dialog —
   a cursor answers instantly and costs nothing. The title screen is a HOW
-  TO PLAY plate over two mode cards (DEFENSE / DUEL); losing brings a
+  TO PLAY plate over three mode cards (DEFENSE / DUEL / CAMPAIGN) plus
+  LOADOUT; losing brings a
   WIPED OUT / TOWER DRAINED / YOU GOT SLIMED plate with AGAIN and MENU.
   Between waves, three upgrade cards swing up: Heavy Juice (damage),
   Orbiters (vampire-survivors globes that grind anything they touch),
   Buoyancy (max health + full heal), Juice Bomb (thrown pistols
   detonate), Burst (balls burst with AOE) — all stacking. All of it is
-  one shared CardBoard primitive (ui/cardBoard.ts) driven by
-  PointerSystem, and one trigger press does exactly one thing: a click
+  one shared pointer-surface contract driven by PointerSystem, and one
+  trigger press does exactly one thing: a click
   that picks a card can't also squirt juice or slam down a ghost.
 - **The floor comes back** — clearing a wave sends an aqua ring sweeping
   out from the tower that slurps every floor splat it passes (with a long
@@ -220,9 +255,8 @@ Quest 3 (WASD + mouse).
 
 ## The design (where this is going)
 
-- **More weapons**: the pistol is weapon one of a family — a pump shotgun
-  that needs real pump-action, a pressure sprayer you charge up, a balloon
-  lobber — all sharing the unified visible-liquid ammo system.
+- **More tools**: pump-action, charged and balloon-lobber families can now
+  join the same six-slot data model and unified visible-liquid ammo system.
 - **More upgrades**: tank capacity, faster holster respawn, fire rate,
   pierce, chain bursts, and weapon-specific branches.
 - **Squeegee your visor** — wipe the juice off your view with a hand swipe
@@ -233,7 +267,8 @@ Quest 3 (WASD + mouse).
   lifts and carries you over, setting you down on the far deck. You moved
   through the space, but you never left your platform and never touched a
   thumbstick. On the back burner until the combat sandbox is dialled.
-- **Boss battles** with FIRE FIGHT-style mechanics every 10th wave.
+- **More campaign routes**: branching detours, challenge nodes and district
+  modifiers once the first linear balance pass is locked.
 - **Plastic + water everywhere**: caustic light dapple on the deck, drips
   running off the rim, juice that drips down enemies in world space.
 
@@ -244,15 +279,21 @@ src/
   config.ts               every tunable the feel depends on, in one place
   main.ts                 World boot + system registration (+ dev hooks)
   game/run.ts             run state: health, upgrade stacks, score
+  game/loadout.ts         seven tool profiles + saved ordered six slots
+  campaign/               saved route data + FIRE FIGHT telegraph shaders
+  goopliath/              raymarched gel body, sim, poses and pooled mess
   arena/                  static set-dressing: deck, lighting, title banner
   components/             ECS data: WaterPistol
-  game/appState.ts        title -> playing -> gameover flow
+  game/appState.ts        title/map/playing/gameover flow + current mode
   ui/cardBoard.ts         the ONE menu primitive: point-and-click cards
+  ui/campaignMap.ts       illustrated, pointer-driven fifteen-node map
+  ui/loadoutBoard.ts      top-down octagon + six spatial socket editor
   game/shop.ts            the bank (DROPS), placed turrets, build state
   systems/                WeaponSystem (draw/fire/drain/throw/slosh),
                           JuiceSystem (ball flight, hits, bursts, splats),
                           EnemySystem (waves, AI, threat, deaths, blasts),
                           UpgradeSystem (between-wave offers),
+                          CampaignSystem (map, encounters, Goopliath bosses),
                           MenuSystem (title + game-over boards),
                           TowerSystem (ghost placement, reservoir, wobble),
                           TurretSystem (watch, shop, turrets),
@@ -271,10 +312,13 @@ src/
 **Nothing high-frequency is an ECS entity.** Juice balls, enemies and damage
 digits all live in typed-array slots rendered through instanced meshes — at
 swarm scale, per-entity Groups and materials would sink the frame budget.
-Only the two pistols are entities. Enemy state has exactly one writer
+Only grabbable tools are entities: two hip Raptors normally, six saved socket
+tools during a boss. Enemy state has exactly one writer
 (`EnemySystem`); everything else — bursts, juice bombs, orbiters — requests
 damage over the juice bus.
 
-In dev (`npm run dev`) the game exposes `window.SPLASH` — `stats()`,
-`digits()`, `hitFirstEnemy()`, `popAt()` — for debugging and for the headless
-smoke tests. It is compiled out of production builds.
+In dev (`npm run dev`) the game exposes `window.SPLASH` — including
+`stats()`, `campaignState()`, `campaignStart()`, `campaignDamageBoss()`,
+`loadout()`, `setLoadout()`,
+`digits()`, `hitFirstEnemy()` and `popAt()` — for debugging and smoke tests.
+It is compiled out of production builds.

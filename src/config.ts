@@ -174,6 +174,36 @@ export const WAVES = {
 };
 
 /**
+ * THE GREAT SPLASH — the world-map campaign and its Blaston-sized boss pad.
+ * Boss definitions and route content live in campaign/campaignState.ts;
+ * these are the shared physical rules used by the arena and telegraphs.
+ */
+export const CAMPAIGN = {
+  padRadius: 1.08,
+  padDepth: 1.85,
+  bossDistance: 4.45,
+  decalY: 0.018,
+  slamRadius: 0.34,
+  beamHalfWidth: 0.22,
+  beamLockAt: 0.72,
+  sweepHeight: 1.18,
+  sweepThickness: 0.18,
+  novaHalfAngle: 0.5,
+  seesawGap: 0.62,
+  volleyCount: 4,
+  volleyInterval: 0.34,
+  attackDamage: 28,
+  invulnerable: 0.72,
+  introTime: 3.0,
+  victoryTime: 2.6,
+  enrageCooldownMult: 0.6,
+  goopTimeScale: 0.58,
+  goopQuality: 0.66,
+  goopAttackQuality: 0.46,
+  goopImpactScale: 1.45,
+};
+
+/**
  * THE PORTAL — the single door THE THIRST pours out of. It opens on the far
  * side of the tower from where you stood when you planted it, so the whole
  * fight reads left to right: portal → your maze → the tower. One spawn

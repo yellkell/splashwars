@@ -10,6 +10,23 @@ import { Vector3 } from 'three';
 export interface BlobSpawn {
   pos: Vector3;
   vel: Vector3;
+  curve: Vector3;
+  /** Zero/negative values ask JuiceSystem for the ordinary Raptor default. */
+  radius: number;
+  gravity: number;
+  lifetime: number;
+  damageScale: number;
+  /** Optional per-shot RGB tint; 0 asks the renderer for its team default. */
+  tint: number;
+}
+
+export interface BlobProfile {
+  radius: number;
+  gravity: number;
+  lifetime: number;
+  damageScale: number;
+  /** Constant bend acceleration, derived from an Ellipse punch. */
+  curve?: Vector3;
 }
 
 /** Player juice balls squirted this frame, awaiting the juice sim. */
@@ -17,11 +34,31 @@ export const pendingBlobs: BlobSpawn[] = [];
 
 const spare: BlobSpawn[] = [];
 
+function takeSpawn(): BlobSpawn {
+  return spare.pop() ?? {
+    pos: new Vector3(),
+    vel: new Vector3(),
+    curve: new Vector3(),
+    radius: 0,
+    gravity: -1,
+    lifetime: -1,
+    damageScale: 1,
+    tint: 0,
+  };
+}
+
 /** Queue a juice ball (recycles spawn records). */
-export function squirtBlob(pos: Vector3, vel: Vector3): void {
-  const s = spare.pop() ?? { pos: new Vector3(), vel: new Vector3() };
+export function squirtBlob(pos: Vector3, vel: Vector3, profile?: BlobProfile): void {
+  const s = takeSpawn();
   s.pos.copy(pos);
   s.vel.copy(vel);
+  if (profile?.curve) s.curve.copy(profile.curve);
+  else s.curve.set(0, 0, 0);
+  s.radius = profile?.radius ?? 0;
+  s.gravity = profile?.gravity ?? -1;
+  s.lifetime = profile?.lifetime ?? -1;
+  s.damageScale = profile?.damageScale ?? 1;
+  s.tint = 0;
   pendingBlobs.push(s);
 }
 
@@ -33,10 +70,16 @@ export function recycleSpawn(s: BlobSpawn): void {
 /** Enemy return fire queued by EnemySystem, flown by JuiceSystem. */
 export const pendingEnemyShots: BlobSpawn[] = [];
 
-export function enemyShot(pos: Vector3, vel: Vector3): void {
-  const s = spare.pop() ?? { pos: new Vector3(), vel: new Vector3() };
+export function enemyShot(pos: Vector3, vel: Vector3, tint = 0): void {
+  const s = takeSpawn();
   s.pos.copy(pos);
   s.vel.copy(vel);
+  s.curve.set(0, 0, 0);
+  s.radius = 0;
+  s.gravity = -1;
+  s.lifetime = -1;
+  s.damageScale = 1;
+  s.tint = tint;
   pendingEnemyShots.push(s);
 }
 

@@ -23,6 +23,7 @@ import { TowerSystem } from './systems/TowerSystem.js';
 import { TurretSystem } from './systems/TurretSystem.js';
 import { DuelSystem } from './systems/DuelSystem.js';
 import { PointerSystem } from './systems/PointerSystem.js';
+import { CampaignSystem } from './systems/CampaignSystem.js';
 import { run } from './game/run.js';
 import { app } from './game/appState.js';
 import { tower as towerState } from './game/tower.js';
@@ -34,6 +35,7 @@ import { flowAt as debugFlowAt, portal as debugPortal } from './game/field.js';
 import { activeBoards as debugActiveBoards, menuClick as debugMenuClick } from './ui/cardBoard.js';
 import { Quaternion as DebugQuat, Vector3 as DebugVec3 } from 'three';
 import { heldAimQuat } from './input/aim.js';
+import { loadout, setLoadoutSlot, toolByIndex, type ToolIdT } from './game/loadout.js';
 
 const container = document.getElementById('scene-container') as HTMLDivElement;
 
@@ -67,6 +69,7 @@ World.create(container, {
   // feed the juice bus before the sim drains it, and the juice sim applies
   // hits before the wave director resolves deaths and area damage.
   world.registerSystem(EnemySystem);
+  world.registerSystem(CampaignSystem);
   world.registerSystem(UpgradeSystem);
   world.registerSystem(MenuSystem);
   world.registerSystem(TowerSystem);
@@ -130,6 +133,15 @@ World.create(container, {
         app.mode = 'duel';
         world.getSystem(MenuSystem)?.startRun();
       },
+      startCampaign: () => world.getSystem(CampaignSystem)?.openMap(),
+      campaignStart: (id = 'lido-dry-run') => world.getSystem(CampaignSystem)?.startNode(id),
+      campaignState: () => world.getSystem(CampaignSystem)?.state(),
+      campaignDamageBoss: (amount = 400) => world.getSystem(CampaignSystem)?.damageBoss(amount),
+      loadout: () => [...loadout.slots],
+      setLoadout: (slot = 0, tool: ToolIdT = 'raptor') => {
+        setLoadoutSlot(slot, tool);
+        return [...loadout.slots];
+      },
       duelState: () => world.getSystem(DuelSystem)?.state(),
       duelBuy: (id = 'juice') => world.getSystem(DuelSystem)?.purchase(id),
       placeTower: (x = 0, z = -1.5) =>
@@ -176,6 +188,9 @@ World.create(container, {
         if (!ws) return [];
         return [...ws.queries.pistols.entities].map((ent) => ({
           hand: ent.getValue(WaterPistol, 'hand'),
+          homeHand: ent.getValue(WaterPistol, 'homeHand'),
+          station: ent.getValue(WaterPistol, 'station'),
+          tool: toolByIndex(ent.getValue(WaterPistol, 'tool') ?? 0).id,
           state: ent.getValue(WaterPistol, 'state'),
           ammo: +(ent.getValue(WaterPistol, 'ammo') ?? 0).toFixed(4),
         }));

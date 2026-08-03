@@ -71,8 +71,21 @@ interface Card {
   shake: number;
 }
 
-/** Every board currently on screen — PointerSystem raycasts these. */
-export const activeBoards = new Set<CardBoard>();
+/**
+ * The small interaction contract shared by ordinary card grids and the
+ * campaign's illustrated world map. PointerSystem only cares that something
+ * can answer a ray, expose a hover, and resolve one trigger press.
+ */
+export interface PointerBoard {
+  hitTest(origin: Vector3, dir: Vector3, outPoint: Vector3): { index: number; distance: number } | null;
+  setHover(index: number): boolean;
+  readonly hovered: number;
+  affordableAt(index: number): boolean;
+  activateHover(): boolean;
+}
+
+/** Every pointer-driven surface currently on screen. */
+export const activeBoards = new Set<PointerBoard>();
 
 /**
  * Set when the pointer consumes a trigger press on a menu. While it's
@@ -327,7 +340,11 @@ export class CardBoard {
     ctx.restore();
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = '900 62px system-ui, -apple-system, sans-serif';
+    let titleSize = 62;
+    do {
+      ctx.font = `900 ${titleSize}px system-ui, -apple-system, sans-serif`;
+      titleSize -= 2;
+    } while (titleSize > 32 && ctx.measureText(spec.title).width > W - 58);
     ctx.fillText(spec.title, W / 2, 92);
 
     if (spec.blurb) {

@@ -144,6 +144,20 @@ export function resetRun(): void {
   run.stacks = emptyStacks();
 }
 
+/**
+ * Begin a campaign encounter at full health while carrying the loadout earned
+ * on the world map. BUOYANCY's max-health stacks are rebuilt explicitly — in
+ * DEFENSE they are normally applied live one card at a time.
+ */
+export function resetRunWithStacks(saved: Partial<Record<UpgradeIdT, number>>): void {
+  resetRun();
+  for (const def of UPGRADE_CATALOGUE) {
+    run.stacks[def.id] = Math.max(0, Math.min(def.max, Math.floor(saved[def.id] ?? 0)));
+  }
+  run.maxHealth = PLAYER.maxHealth + run.stacks[UpgradeId.Health] * 25;
+  run.health = run.maxHealth;
+}
+
 /** Apply a chosen upgrade. */
 export function applyUpgrade(id: UpgradeIdT): void {
   run.stacks[id] += 1;

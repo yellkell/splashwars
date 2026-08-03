@@ -44,6 +44,7 @@ import { app } from '../game/appState.js';
 import { addDrops, placedTurrets } from '../game/shop.js';
 import * as sfx from '../audio/sfx.js';
 import { SHOP as SHOP_CFG } from '../config.js';
+import type { SwarmEncounter } from '../campaign/campaignState.js';
 
 const SHOP_BONUS = SHOP_CFG.waveClearBonus;
 
@@ -71,7 +72,7 @@ const _shotVel = new Vector3();
 const _flow = new Vector3();
 const _near: number[] = [];
 
-type Phase = 'intermission' | 'wave' | 'upgrade';
+type Phase = 'intermission' | 'wave' | 'campaign' | 'upgrade';
 
 export class EnemySystem extends createSystem({}) {
   swarm!: Swarm;
@@ -82,6 +83,9 @@ export class EnemySystem extends createSystem({}) {
   private time = 0;
   private coinStreak = 0;
   private sinceCoin = 99;
+  private campaignEncounter: SwarmEncounter | null = null;
+  private campaignWon = false;
+  private spawnHpScale = 1;
 
   // The floating wave sign.
   private sign!: Mesh;
@@ -169,9 +173,44 @@ export class EnemySystem extends createSystem({}) {
     this.toSpawn = 0;
     this.spawnAcc = 0;
     upgradeGate.pending = false;
+    upgradeGate.afterPick = null;
+    this.campaignEncounter = null;
+    this.campaignWon = false;
     this.phase = 'intermission';
     this.timer = WAVES.interWaveDelay;
     this.setSign('WAVE 1 INCOMING', '#1fc4c9');
+  }
+
+  /**
+   * Start one world-map fight. It uses the same tower, portal, swarm and
+   * combat rules as DEFENSE, but has a finite authored roster and hands the
+   * clear back to CampaignSystem instead of looping into another wave.
+   */
+  startCampaignEncounter(spec: SwarmEncounter): void {
+    this.world.camera.getWorldPosition(_head);
+    setupField(tower.pos, _head);
+    wipeFloor(tower.pos);
+    for (let i = 0; i < this.swarm.px.length; i++) {
+      if (this.swarm.alive[i]) this.swarm.kill(i);
+    }
+    this.campaignEncounter = spec;
+    this.campaignWon = false;
+    this.spawnHpScale = spec.hpScale;
+    this.toSpawn = spec.enemies;
+    this.spawnAcc = 0;
+    this.phase = 'campaign';
+    run.wave = 1;
+    upgradeGate.pending = false;
+    upgradeGate.afterPick = null;
+    this.setSign(`${spec.enemies} THIRST INCOMING`, '#1fc4c9');
+    sfx.waveHorn();
+  }
+
+  /** One-shot clear flag consumed by CampaignSystem. */
+  takeCampaignVictory(): boolean {
+    if (!this.campaignWon) return false;
+    this.campaignWon = false;
+    return true;
   }
 
   /**
@@ -187,6 +226,9 @@ export class EnemySystem extends createSystem({}) {
     this.toSpawn = 0;
     this.spawnAcc = 0;
     upgradeGate.pending = false;
+    upgradeGate.afterPick = null;
+    this.campaignEncounter = null;
+    this.campaignWon = false;
     this.phase = 'intermission';
     this.timer = WAVES.interWaveDelay;
     this.setSign('WIPED OUT — GOING AGAIN', '#e0312e');
@@ -217,7 +259,8 @@ export class EnemySystem extends createSystem({}) {
     // Outside a run — or outside DEFENSE mode entirely (the duel has no
     // waves) — there is nothing to direct. The sign stays shared: the duel
     // borrows setSign() for its own announcements.
-    if (app.phase !== 'playing' || app.mode !== 'defense') {
+    const campaignFight = app.mode === 'campaign' && this.campaignEncounter !== null;
+    if (app.phase !== 'playing' || (app.mode !== 'defense' && !campaignFight)) {
       pendingBlasts.length = 0;
       return;
     }
@@ -236,6 +279,22 @@ export class EnemySystem extends createSystem({}) {
         }
       } else if (swarm.count === 0) {
         this.finishWave();
+      }
+    } else if (this.phase === 'campaign') {
+      if (this.toSpawn > 0) {
+        this.spawnAcc += WAVES.spawnRate * delta;
+        while (this.spawnAcc >= 1 && this.toSpawn > 0) {
+          this.spawnAcc -= 1;
+          this.toSpawn -= 1;
+          this.spawnCampaignEnemy();
+        }
+      } else if (swarm.count === 0) {
+        wipeFloor(tower.pos);
+        sfx.floorClean();
+        this.setSign('ROUTE CLEARED', '#f0299b');
+        this.campaignEncounter = null;
+        this.campaignWon = true;
+        this.phase = 'upgrade';
       }
     }
 
@@ -491,7 +550,9 @@ export class EnemySystem extends createSystem({}) {
     }
 
     if (def.splitInto !== undefined && def.splitCount) {
-      const hpScale = 1 + (run.wave - 1) * WAVES.hpPerWave;
+      const hpScale = app.mode === 'campaign'
+        ? this.spawnHpScale
+        : 1 + (run.wave - 1) * WAVES.hpPerWave;
       for (let n = 0; n < def.splitCount; n++) {
         const a = (n / def.splitCount) * Math.PI * 2;
         swarm.spawn(
@@ -602,6 +663,13 @@ export class EnemySystem extends createSystem({}) {
     }
   }
 
+  private spawnCampaignEnemy(): void {
+    const spec = this.campaignEncounter;
+    if (!spec || spec.roster.length === 0) return;
+    const kind = spec.roster[Math.floor(Math.random() * spec.roster.length)];
+    this.spawnAtPortal(kind, spec.hpScale, spec.speedScale);
+  }
+
   /** Everything comes through THE door — with a flare as it does. */
   private spawnAtPortal(kind: EnemyKindId, hpScale: number, speedScale: number, scale = 1): void {
     const a = Math.random() * Math.PI * 2;
@@ -659,4 +727,8 @@ export class EnemySystem extends createSystem({}) {
 }
 
 /** Tiny handshake flag between the wave director and the upgrade board. */
-export const upgradeGate = { pending: false };
+export const upgradeGate = {
+  pending: false,
+  /** Campaign clears return to the map; defense clears start another wave. */
+  afterPick: null as (() => void) | null,
+};

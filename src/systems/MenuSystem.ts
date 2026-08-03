@@ -24,6 +24,10 @@ import { resetBank } from '../game/shop.js';
 import { TurretSystem } from './TurretSystem.js';
 import { EnemySystem } from './EnemySystem.js';
 import { DuelSystem } from './DuelSystem.js';
+import { CampaignSystem } from './CampaignSystem.js';
+import { campaignRuntime, nodeIndex } from '../campaign/campaignState.js';
+import { LoadoutBoard } from '../ui/loadoutBoard.js';
+import { TOOL_DEFINITIONS, setLoadoutSlot, type ToolIdT } from '../game/loadout.js';
 import * as sfx from '../audio/sfx.js';
 
 const _cam = new Vector3();
@@ -34,6 +38,7 @@ const PLATE_H = 420;
 
 export class MenuSystem extends createSystem({}) {
   private board!: CardBoard;
+  private loadoutBoard!: LoadoutBoard;
   private plate!: Mesh;
   private plateCanvas!: HTMLCanvasElement;
   private plateTex!: CanvasTexture;
@@ -42,6 +47,11 @@ export class MenuSystem extends createSystem({}) {
 
   init(): void {
     this.board = new CardBoard(this.world.scene);
+    this.loadoutBoard = new LoadoutBoard(
+      this.world.scene,
+      (slot) => this.showToolPicker(slot),
+      () => this.showTitle(),
+    );
     this.buildPlate();
   }
 
@@ -55,6 +65,14 @@ export class MenuSystem extends createSystem({}) {
    * DUEL: no tower — the decks appear and the match starts immediately.
    */
   startRun(): void {
+    this.loadoutBoard.hide();
+    if (app.mode === 'campaign') {
+      this.board.hide();
+      this.plate.visible = false;
+      this.shownFor = '';
+      this.world.getSystem(CampaignSystem)?.openMap();
+      return;
+    }
     resetRun();
     resetBank();
     this.world.getSystem(TurretSystem)?.resetField();
@@ -83,29 +101,32 @@ export class MenuSystem extends createSystem({}) {
   update(delta: number): void {
     // The big SPLASH WARS sign belongs to the title screen ONLY — during a
     // fight it's clutter floating over the wave lane.
-    setTitleBannerVisible(app.phase === 'title');
+    setTitleBannerVisible(app.phase === 'title' && !this.shownFor.startsWith('loadout'));
 
     // Show/refresh the board when the phase asks for one.
-    if (app.phase === 'title' && this.shownFor !== 'title') this.showTitle();
+    if (app.phase === 'title' && this.shownFor === '') this.showTitle();
     if (app.phase === 'gameover' && this.shownFor !== 'gameover') this.showGameOver();
-    if ((app.phase === 'playing' || app.phase === 'placing') && this.shownFor !== '') {
+    if ((app.phase === 'playing' || app.phase === 'placing' || app.phase === 'map') && this.shownFor !== '') {
       this.board.hide();
+      this.loadoutBoard.hide();
       this.plate.visible = false;
       this.shownFor = '';
     }
 
     this.world.camera.getWorldPosition(_cam);
     this.board.update(delta, _cam);
+    this.loadoutBoard.update(delta, _cam);
     if (this.plate.visible) this.plate.lookAt(_cam.x, this.plate.position.y, _cam.z);
   }
 
   // --- Boards. -------------------------------------------------------------
 
   private showTitle(): void {
+    this.loadoutBoard.hide();
     this.shownFor = 'title';
     this.drawPlate('title');
     this.plate.visible = true;
-    // Two games: point at the one you want.
+    // Three games plus the spatial six-slot loadout editor.
     this.board.show(
       [
         {
@@ -114,7 +135,7 @@ export class MenuSystem extends createSystem({}) {
           blurb: 'Ten waves of THE THIRST. One tower of juice. Build the maze.',
           effectLine: 'JUICE UP!',
           color: '#f0299b',
-          scale: 1.05,
+          scale: 0.72,
         },
         {
           id: 'duel',
@@ -122,7 +143,23 @@ export class MenuSystem extends createSystem({}) {
           blurb: 'One rival, two decks. Mine minerals, buy juice, soak them first.',
           effectLine: '1 V 1',
           color: '#63c4ff',
-          scale: 1.05,
+          scale: 0.72,
+        },
+        {
+          id: 'campaign',
+          title: 'CAMPAIGN',
+          blurb: 'Cross the world map. Grow stronger. Break GOOPLIATH five times.',
+          effectLine: 'THE GREAT SPLASH',
+          color: '#58dc76',
+          scale: 0.72,
+        },
+        {
+          id: 'loadout',
+          title: 'LOADOUT',
+          blurb: 'Arrange any six tools around the octagonal boss pad.',
+          effectLine: 'EDIT SIX SLOTS',
+          color: '#b176ff',
+          scale: 0.72,
         },
       ],
       {
@@ -131,19 +168,85 @@ export class MenuSystem extends createSystem({}) {
         y: 1.35,
         distance: 2.1,
         onPick: (id) => {
-          app.mode = id as 'defense' | 'duel';
+          if (id === 'loadout') {
+            this.showLoadout();
+            return;
+          }
+          app.mode = id as 'defense' | 'duel' | 'campaign';
           this.startRun();
         },
       },
     );
   }
 
+  private showLoadout(): void {
+    this.board.hide();
+    this.plate.visible = false;
+    this.shownFor = 'loadout';
+    this.loadoutBoard.show();
+  }
+
+  private showToolPicker(slot: number): void {
+    this.loadoutBoard.hide();
+    this.plate.visible = false;
+    this.shownFor = 'loadout-pick';
+    this.board.show(
+      [
+        ...TOOL_DEFINITIONS.map((tool) => ({
+          id: tool.id,
+          title: tool.name,
+          blurb: tool.blurb,
+          effectLine: tool.kind === 'grenade'
+            ? 'PRIME + THROW'
+            : tool.curveStrength > 0
+              ? 'PUNCH TO CURVE'
+              : `${tool.shots} SHOTS`,
+          footnote: `SLOT ${slot + 1}`,
+          color: tool.color,
+          scale: 0.66,
+        })),
+        {
+          id: 'back',
+          title: 'BACK',
+          blurb: 'Keep the current tool in this socket.',
+          effectLine: `SLOT ${slot + 1}`,
+          color: '#71858c',
+          scale: 0.66,
+        },
+      ],
+      {
+        y: 1.48,
+        distance: 2.35,
+        perRow: 4,
+        onPick: (id) => {
+          if (id !== 'back') setLoadoutSlot(slot, id as ToolIdT);
+          this.showLoadout();
+        },
+      },
+    );
+  }
+
   private showGameOver(): void {
+    this.loadoutBoard.hide();
     this.shownFor = 'gameover';
     this.drawPlate('gameover');
     this.plate.visible = true;
-    this.board.show(
-      [
+    const cards = app.mode === 'campaign'
+      ? [
+          {
+            id: 'again',
+            title: 'TRY AGAIN',
+            blurb: 'Same stop, same earned powers',
+            color: '#58dc76',
+          },
+          {
+            id: 'map',
+            title: 'WORLD MAP',
+            blurb: 'Choose another cleared stop',
+            color: '#63c4ff',
+          },
+        ]
+      : [
         {
           id: 'again',
           title: 'AGAIN',
@@ -156,12 +259,17 @@ export class MenuSystem extends createSystem({}) {
           blurb: 'Catch your breath',
           color: '#7c8a94',
         },
-      ],
+      ];
+    this.board.show(
+      cards,
       {
         y: 1.3,
         distance: 2.1,
         onPick: (id) => {
-          if (id === 'again') this.startRun();
+          if (app.mode === 'campaign') {
+            if (id === 'again') this.world.getSystem(CampaignSystem)?.retryCurrent();
+            else this.world.getSystem(CampaignSystem)?.openMap();
+          } else if (id === 'again') this.startRun();
           else {
             // Back to the title: the tower comes up too, so a fresh run
             // gets a fresh placement.
@@ -214,9 +322,10 @@ export class MenuSystem extends createSystem({}) {
       ctx.fillText('POINT AND PULL THE TRIGGER to answer any menu', W / 2, 165);
       ctx.fillText('SQUEEZE GRIP at your hip — draw a pistol', W / 2, 230);
       ctx.fillText('PULL TRIGGER — one ball per press, make them count', W / 2, 295);
-      ctx.fillText('RELEASE GRIP — throw the gun; a fresh one respawns', W / 2, 352);
+      ctx.fillText('BOSS FIGHTS — move around the pad to grab six tools', W / 2, 352);
     } else {
       const win = run.endReason === 'win';
+      const campaignLoss = app.mode === 'campaign';
       // Losing a DUEL has its own name: you got SLIMED.
       const slimed = !win && app.mode === 'duel';
       ctx.fillStyle = win ? '#f0299b' : slimed ? '#8bd12e' : '#e0312e';
@@ -224,6 +333,8 @@ export class MenuSystem extends createSystem({}) {
       ctx.fillText(
         win
           ? 'SOAKED! YOU WIN'
+          : campaignLoss
+            ? 'ROUTE LOST'
           : slimed
             ? 'YOU GOT SLIMED'
             : run.endReason === 'tower'
@@ -236,6 +347,11 @@ export class MenuSystem extends createSystem({}) {
       ctx.font = '800 52px system-ui, sans-serif';
       if (app.mode === 'duel') {
         ctx.fillText(`${run.score} PTS`, W / 2, 210);
+      } else if (app.mode === 'campaign') {
+        const stop = campaignRuntime.activeNode ? nodeIndex(campaignRuntime.activeNode.id) + 1 : 1;
+        ctx.fillText(`STOP ${stop}`, W / 2 - 300, 210);
+        ctx.fillText(`${run.kills} POPS`, W / 2, 210);
+        ctx.fillText(`${run.score} PTS`, W / 2 + 300, 210);
       } else {
         ctx.fillText(`WAVE ${Math.max(1, run.wave)}`, W / 2 - 300, 210);
         ctx.fillText(`${run.kills} POPS`, W / 2, 210);
@@ -246,6 +362,8 @@ export class MenuSystem extends createSystem({}) {
       ctx.fillText(
         win
           ? 'their deck drips. your crystals gleam.'
+          : app.mode === 'campaign'
+            ? 'the route remembers every win and every power. go again.'
           : app.mode === 'duel'
             ? 'dripping head to toe. the rival tops up and waits…'
             : 'the reservoir refills, THE THIRST regroups…',

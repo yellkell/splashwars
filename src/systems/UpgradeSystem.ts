@@ -36,7 +36,7 @@ export class UpgradeSystem extends createSystem({}) {
     const offers = offerUpgrades();
     if (offers.length === 0) {
       // Everything maxed — nothing to choose, carry straight on.
-      this.world.getSystem(EnemySystem)?.resumeAfterUpgrade();
+      this.finishPick();
       return;
     }
     this.board.show(
@@ -51,9 +51,16 @@ export class UpgradeSystem extends createSystem({}) {
       {
         onPick: (id) => {
           applyUpgrade(id as UpgradeIdT);
-          this.world.getSystem(EnemySystem)?.resumeAfterUpgrade();
+          this.finishPick();
         },
       },
     );
+  }
+
+  private finishPick(): void {
+    const after = upgradeGate.afterPick;
+    upgradeGate.afterPick = null;
+    if (after) after();
+    else this.world.getSystem(EnemySystem)?.resumeAfterUpgrade();
   }
 }

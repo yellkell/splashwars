@@ -1,7 +1,7 @@
 /**
- * One plastic water pistol, bonded to a hand. `WeaponSystem` runs the firing
- * loop, drains/refills the tank and drives the sloshing liquid visual — the
- * tank's visible level IS this component's `ammo`.
+ * One Splash tool. Defense/Duel create two hip-bound Raptors; campaign boss
+ * fights create the six guns or grenades selected for the pad sockets.
+ * `WeaponSystem` owns pickup, firing, throwing, respawn and visible ammo.
  */
 
 import { createComponent, Types } from '@iwsdk/core';
@@ -15,13 +15,21 @@ export const PistolState = {
   Flying: 2,
   /** Burst on impact; a fresh gun is on its way to the hip. */
   Respawning: 3,
+  /** Resting in one of the six boss-platform pickup sockets. */
+  Docked: 4,
 } as const;
 
 export const WaterPistol = createComponent(
   'WaterPistol',
   {
-    /** Which hip/hand it belongs to: 0 = left, 1 = right. */
+    /** Current/last hand: 0 = left, 1 = right, -1 = no hand. */
     hand: { type: Types.Int32, default: 0 },
+    /** Permanent hip owner for ordinary Raptors; -1 for platform tools. */
+    homeHand: { type: Types.Int32, default: -1 },
+    /** Index into TOOL_DEFINITIONS. */
+    tool: { type: Types.Int32, default: 0 },
+    /** Boss-platform socket 0..5, or -1 for an ordinary hip tool. */
+    station: { type: Types.Int32, default: -1 },
     /** PistolState — see above. */
     state: { type: Types.Int32, default: 0 },
     /** Respawn countdown while Respawning. */
@@ -35,5 +43,5 @@ export const WaterPistol = createComponent(
     /** Dribble shots left in the empty-tank sputter. */
     sputter: { type: Types.Int32, default: 0 },
   },
-  'A plastic water pistol with a visible, sloshing juice tank.',
+  'A grabbable Splash tool with visible juice and a physical spawn point.',
 );

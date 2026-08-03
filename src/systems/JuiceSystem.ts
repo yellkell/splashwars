@@ -25,6 +25,7 @@ import {
   pendingEnemyShots,
   recycleSpawn,
   requestBlast,
+  type BlobSpawn,
 } from '../combat/juiceBus.js';
 import {
   MAX_BLOBS,
@@ -59,6 +60,14 @@ export class JuiceSystem extends createSystem({}) {
   private vx = new Float32Array(MAX_BLOBS);
   private vy = new Float32Array(MAX_BLOBS);
   private vz = new Float32Array(MAX_BLOBS);
+  private ax = new Float32Array(MAX_BLOBS);
+  private ay = new Float32Array(MAX_BLOBS);
+  private az = new Float32Array(MAX_BLOBS);
+  private radius = new Float32Array(MAX_BLOBS);
+  private gravity = new Float32Array(MAX_BLOBS);
+  private lifetime = new Float32Array(MAX_BLOBS);
+  private damageScale = new Float32Array(MAX_BLOBS);
+  private tint = new Uint32Array(MAX_BLOBS);
   private age = new Float32Array(MAX_BLOBS);
   private alive = new Uint8Array(MAX_BLOBS);
   /** 1 = enemy return fire (hurts you), 0 = yours (hurts them). */
@@ -82,8 +91,8 @@ export class JuiceSystem extends createSystem({}) {
     this.world.camera.getWorldQuaternion(_camQ);
 
     // Claim freshly-fired balls from both sides.
-    for (const s of pendingBlobs.splice(0)) this.claim(s.pos, s.vel, 0), recycleSpawn(s);
-    for (const s of pendingEnemyShots.splice(0)) this.claim(s.pos, s.vel, 1), recycleSpawn(s);
+    for (const s of pendingBlobs.splice(0)) this.claim(s, 0), recycleSpawn(s);
+    for (const s of pendingEnemyShots.splice(0)) this.claim(s, 1), recycleSpawn(s);
 
     const burstStacks = run.stacks[UpgradeId.Burst];
     const damage = ballDamage();
@@ -92,9 +101,13 @@ export class JuiceSystem extends createSystem({}) {
       if (!this.alive[i]) continue;
 
       const hostile = this.hostile[i] === 1;
-      const gravity = hostile ? ENEMY_SHOT.gravity : PISTOL.gravity;
-      const radius = hostile ? ENEMY_SHOT.radius : PISTOL.blobRadius;
+      const gravity = this.gravity[i];
+      const radius = this.radius[i];
+      const shotDamage = damage * this.damageScale[i];
 
+      this.vx[i] += this.ax[i] * delta;
+      this.vy[i] += this.ay[i] * delta;
+      this.vz[i] += this.az[i] * delta;
       this.vy[i] -= gravity * delta;
       this.px[i] += this.vx[i] * delta;
       this.py[i] += this.vy[i] * delta;
@@ -146,13 +159,13 @@ export class JuiceSystem extends createSystem({}) {
             const dz = swarm.pz[j] - this.pz[i];
             const r = swarm.radius[j] + radius;
             if (dx * dx + dy * dy + dz * dz <= r * r) {
-              enemies!.hit(j, damage);
+              enemies!.hit(j, shotDamage);
               dropletBurst(_pos, 8, 0.9);
               if (burstStacks > 0) {
                 requestBlast(
                   _pos,
                   AOE.burstRadius + AOE.burstRadiusPerStack * (burstStacks - 1),
-                  damage * AOE.burstFraction,
+                  shotDamage * AOE.burstFraction,
                   false,
                 );
               }
@@ -172,7 +185,7 @@ export class JuiceSystem extends createSystem({}) {
           for (const t of ballTargets) {
             if (t.hitByHostile || !t.alive()) continue;
             const r = t.radius + radius;
-            if (_pos.distanceToSquared(t.pos) <= r * r && t.onHit(damage, _pos)) {
+            if (_pos.distanceToSquared(t.pos) <= r * r && t.onHit(shotDamage, _pos)) {
               dropletBurst(_pos, 6, 0.9);
               hit = true;
               break;
@@ -194,7 +207,8 @@ export class JuiceSystem extends createSystem({}) {
       // --- Floor landing: stamp the splat. ---
       if (!hit && this.py[i] <= radius) {
         _pos.y = 0;
-        this.splats.stamp(_pos, (hostile ? 0.1 : 0.18) + Math.random() * 0.1);
+        const sizeScale = hostile ? 1 : Math.max(0.42, radius / PISTOL.blobRadius);
+        this.splats.stamp(_pos, ((hostile ? 0.1 : 0.18) + Math.random() * 0.1) * sizeScale);
         dropletBurst(_pos, hostile ? 4 : 7, 0.7);
         if (this.splatSfxAcc <= 0) {
           sfx.splat();
@@ -206,7 +220,7 @@ export class JuiceSystem extends createSystem({}) {
       // --- Cull: lifetime and the invisible cage. ---
       if (
         hit ||
-        this.age[i] >= (hostile ? ENEMY_SHOT.lifetime : PISTOL.lifetime) ||
+        this.age[i] >= this.lifetime[i] ||
         this.py[i] > ARENA_BOUNDS.ceiling ||
         this.px[i] * this.px[i] + this.pz[i] * this.pz[i] > ARENA_BOUNDS.radius * ARENA_BOUNDS.radius
       ) {
@@ -216,7 +230,7 @@ export class JuiceSystem extends createSystem({}) {
       }
 
       _vel.set(this.vx[i], this.vy[i], this.vz[i]);
-      this.blobs.place(i, _pos, _vel, hostile);
+      this.blobs.place(i, _pos, _vel, hostile, radius, this.tint[i]);
     }
 
     this.blobs.commit();
@@ -225,11 +239,19 @@ export class JuiceSystem extends createSystem({}) {
     void popDamage;
   }
 
-  private claim(pos: Vector3, vel: Vector3, hostile: 0 | 1): void {
+  private claim(spawn: BlobSpawn, hostile: 0 | 1): void {
     const i = this.cursor;
     this.cursor = (this.cursor + 1) % MAX_BLOBS;
-    this.px[i] = pos.x; this.py[i] = pos.y; this.pz[i] = pos.z;
-    this.vx[i] = vel.x; this.vy[i] = vel.y; this.vz[i] = vel.z;
+    this.px[i] = spawn.pos.x; this.py[i] = spawn.pos.y; this.pz[i] = spawn.pos.z;
+    this.vx[i] = spawn.vel.x; this.vy[i] = spawn.vel.y; this.vz[i] = spawn.vel.z;
+    this.ax[i] = hostile ? 0 : spawn.curve.x;
+    this.ay[i] = hostile ? 0 : spawn.curve.y;
+    this.az[i] = hostile ? 0 : spawn.curve.z;
+    this.radius[i] = hostile ? ENEMY_SHOT.radius : spawn.radius > 0 ? spawn.radius : PISTOL.blobRadius;
+    this.gravity[i] = hostile ? ENEMY_SHOT.gravity : spawn.gravity >= 0 ? spawn.gravity : PISTOL.gravity;
+    this.lifetime[i] = hostile ? ENEMY_SHOT.lifetime : spawn.lifetime > 0 ? spawn.lifetime : PISTOL.lifetime;
+    this.damageScale[i] = hostile ? 1 : Math.max(0, spawn.damageScale);
+    this.tint[i] = spawn.tint;
     this.age[i] = 0;
     this.alive[i] = 1;
     this.hostile[i] = hostile;

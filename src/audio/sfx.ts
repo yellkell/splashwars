@@ -177,9 +177,10 @@ export function squirtStop(hand: 0 | 1): void {
 // --- One-shots. ------------------------------------------------------------
 
 /** Juice landing on the deck/floor — a fat wet plop. */
-export function splat(): void {
-  noiseBurst(900, 1.1, 0.16, 0.22, 300);
-  blip(220, 90, 0.1, 0.1);
+export function splat(strength = 1): void {
+  const s = Math.max(0.35, Math.min(1.4, strength));
+  noiseBurst(900, 1.1, 0.16 + s * 0.04, 0.16 + s * 0.06, 300);
+  blip(220 * s, 90, 0.1, 0.08 + s * 0.025);
 }
 
 /** Juice landing on an enemy — plasticky slap on top of the plop. */
@@ -343,4 +344,55 @@ export function waveHorn(): void {
   setTimeout(() => blip(659, 659, 0.16, 0.2, 'triangle'), 140);
   setTimeout(() => blip(784, 784, 0.28, 0.24, 'triangle'), 280);
   noiseBurst(400, 0.7, 0.8, 0.06, 1200);
+}
+
+// --- GOOPLIATH -------------------------------------------------------------
+// The gel creature is vendored from FIRE FIGHT, but its foley is rebuilt in
+// SPLASH WARS' round, toy-water palette rather than carrying metal impacts.
+
+export function gooRise(): void {
+  bloop(90, 55, 520, 0.75, 0.28);
+  noiseBurst(260, 0.7, 0.75, 0.14, 1000);
+}
+
+export function gooSink(): void {
+  bloop(380, 120, 58, 0.65, 0.26);
+  noiseBurst(520, 0.8, 0.55, 0.12, 120);
+}
+
+export function gooCharge(duration = 0.8): void {
+  const d = Math.max(0.2, Math.min(1.8, duration));
+  blip(120, 520, d, 0.16, 'sine');
+  noiseBurst(280, 1.2, d, 0.07, 940);
+}
+
+export function gooWhoosh(): void {
+  noiseBurst(420, 0.65, 0.34, 0.2, 150);
+}
+
+export function kickWhoosh(): void {
+  noiseBurst(620, 0.7, 0.26, 0.2, 180);
+}
+
+export function spinWhoosh(): void {
+  noiseBurst(360, 0.55, 0.52, 0.22, 1100);
+}
+
+export function gooSlam(): void {
+  blip(115, 42, 0.42, 0.38, 'sine');
+  noiseBurst(360, 0.65, 0.62, 0.32, 90);
+}
+
+export function koSplat(): void {
+  gooSlam();
+  setTimeout(() => bloop(110, 65, 300, 0.5, 0.16), 110);
+}
+
+export function slurp(): void {
+  bloop(105, 62, 680, 0.46, 0.16);
+}
+
+export function tear(): void {
+  noiseBurst(1050, 0.8, 0.3, 0.2, 190);
+  bloop(250, 95, 410, 0.22, 0.12);
 }
