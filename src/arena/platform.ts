@@ -4,23 +4,18 @@
  * (see systems/TowerSystem.ts), so the floor is your floor, and juice
  * lands straight on it as splat decals.
  *
- * What's left here is the look: bright poolside key light, soft sky fill,
- * an aqua bounce, and the SPLASH WARS title banner floating out where the
- * waves will come from. Static set-dressing parented under `world.scene`.
+ * What's left here is the look: bright poolside key light, soft sky fill
+ * and an aqua bounce. Static set-dressing parented under `world.scene`.
  */
 
 import { Group, HemisphereLight, PointLight, type Object3D } from 'three';
 import type { World } from '@iwsdk/core';
 import { PALETTE } from '../config.js';
-import { createTitleBanner } from './banner.js';
 
 export function buildStage(world: World): Object3D {
   const scene = world.scene;
   const stage = new Group();
   stage.name = 'stage';
-
-  // "SPLASH WARS" signage floating out where wave one will come from.
-  createTitleBanner(scene);
 
   // --- Lighting: bright poolside key + soft sky fill so plastic gleams ---
   stage.add(new HemisphereLight(0xeaf7ff, 0xfff2d8, 1.25));

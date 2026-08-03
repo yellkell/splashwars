@@ -22,17 +22,14 @@
 
 import { createSystem, Vector3 } from '@iwsdk/core';
 import {
-  CanvasTexture,
   CircleGeometry,
   DoubleSide,
   Group,
   Mesh,
   MeshBasicMaterial,
-  PlaneGeometry,
   ShaderMaterial,
   TorusGeometry,
 } from 'three';
-import { crispTexture, logicalCanvas } from '../ui/crispCanvas.js';
 import { fleeAt, flowAt, portal, setupField, wallAt } from '../game/field.js';
 import { Swarm } from '../enemies/swarm.js';
 import { dropletBurst, initJuicePools, wipeFloor } from '../fx/juice.js';
@@ -48,9 +45,6 @@ import type { SwarmEncounter } from '../campaign/campaignState.js';
 
 const SHOP_BONUS = SHOP_CFG.waveClearBonus;
 
-// The wave sign's logical canvas size (drawn at 2× by crispCanvas).
-const SIGN_W = 1024;
-const SIGN_H = 200;
 import {
   ENEMY,
   ENEMY_SHOT,
@@ -87,10 +81,6 @@ export class EnemySystem extends createSystem({}) {
   private campaignWon = false;
   private spawnHpScale = 1;
 
-  // The floating wave sign.
-  private sign!: Mesh;
-  private signCanvas!: HTMLCanvasElement;
-  private signTex!: CanvasTexture;
 
   // THE PORTAL — the one door THE THIRST comes through.
   private portalGroup!: Group;
@@ -102,9 +92,7 @@ export class EnemySystem extends createSystem({}) {
     initDamageNumbers(this.world.scene);
     this.swarm = new Swarm(PALETTE.juice, PALETTE.juiceDeep);
     this.world.scene.add(this.swarm.group);
-    this.buildSign();
     this.buildPortal();
-    this.setSign('SHOOT START TO PLAY', '#1fc4c9');
   }
 
   /** The rival team's door: a violet ring with a swirling drink inside. */
@@ -178,7 +166,6 @@ export class EnemySystem extends createSystem({}) {
     this.campaignWon = false;
     this.phase = 'intermission';
     this.timer = WAVES.interWaveDelay;
-    this.setSign('WAVE 1 INCOMING', '#1fc4c9');
   }
 
   /**
@@ -202,7 +189,6 @@ export class EnemySystem extends createSystem({}) {
     run.wave = 1;
     upgradeGate.pending = false;
     upgradeGate.afterPick = null;
-    this.setSign(`${spec.enemies} THIRST INCOMING`, '#1fc4c9');
     sfx.waveHorn();
   }
 
@@ -231,7 +217,6 @@ export class EnemySystem extends createSystem({}) {
     this.campaignWon = false;
     this.phase = 'intermission';
     this.timer = WAVES.interWaveDelay;
-    this.setSign('WIPED OUT — GOING AGAIN', '#e0312e');
   }
 
   update(delta: number): void {
@@ -240,8 +225,6 @@ export class EnemySystem extends createSystem({}) {
     const swarm = this.swarm;
 
     this.world.camera.getWorldPosition(_head);
-    // The sign gently faces the player in every phase.
-    this.sign.lookAt(_head);
 
     const campaignFight = app.mode === 'campaign' && this.campaignEncounter !== null;
 
@@ -260,9 +243,8 @@ export class EnemySystem extends createSystem({}) {
       this.portalGroup.scale.setScalar(s);
     }
 
-    // Outside a run — or outside DEFENSE mode entirely (the duel has no
-    // waves) — there is nothing to direct. The sign stays shared: the duel
-    // borrows setSign() for its own announcements.
+    // Outside a run — or outside DEFENSE mode entirely (the duel and the
+    // campaign run their own directors) — there is nothing to steer here.
     if (app.phase !== 'playing' || (app.mode !== 'defense' && !campaignFight)) {
       pendingBlasts.length = 0;
       return;
@@ -294,7 +276,6 @@ export class EnemySystem extends createSystem({}) {
       } else if (swarm.count === 0) {
         wipeFloor(tower.pos);
         sfx.floorClean();
-        this.setSign('ROUTE CLEARED', '#f0299b');
         this.campaignEncounter = null;
         this.campaignWon = true;
         this.phase = 'upgrade';
@@ -644,7 +625,6 @@ export class EnemySystem extends createSystem({}) {
           );
     this.spawnAcc = 0;
     sfx.waveHorn();
-    this.setSign(n >= WAVES.count ? 'FINAL WAVE — THE BIG ONE' : `WAVE ${n}`, '#1fc4c9');
   }
 
   private finishWave(): void {
@@ -655,10 +635,8 @@ export class EnemySystem extends createSystem({}) {
     // Clear bonus: the later the wave, the fatter the payout.
     addDrops(WAVES.count >= run.wave ? SHOP_BONUS * run.wave : 0);
     if (run.wave >= WAVES.count) {
-      this.setSign('ALL WAVES CLEARED — LOOPING, HARDER', '#f0299b');
       run.wave = 0;
     } else {
-      this.setSign(`WAVE ${run.wave} CLEARED`, '#f0299b');
     }
     // Hand off to the upgrade board; it calls resumeAfterUpgrade() when done.
     this.phase = 'upgrade';
@@ -703,45 +681,6 @@ export class EnemySystem extends createSystem({}) {
       scale,
     );
     this.portalPulse = 1;
-  }
-
-  // --- The wave sign. ------------------------------------------------------
-
-  private buildSign(): void {
-    this.signCanvas = document.createElement('canvas');
-    logicalCanvas(this.signCanvas, SIGN_W, SIGN_H);
-    this.signTex = crispTexture(this.signCanvas);
-    this.sign = new Mesh(
-      new PlaneGeometry(1.7, 0.33),
-      new MeshBasicMaterial({ map: this.signTex, transparent: true }),
-    );
-    this.sign.position.set(0, 2.05, -3.2);
-    this.world.scene.add(this.sign);
-  }
-
-  setSign(text: string, color: string): void {
-    const ctx = this.signCanvas.getContext('2d')!;
-    const w = SIGN_W;
-    const h = SIGN_H;
-    ctx.clearRect(0, 0, w, h);
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = 'rgba(250,252,255,0.82)';
-    ctx.beginPath();
-    ctx.roundRect(10, 10, w - 20, h - 20, 90);
-    ctx.fill();
-    ctx.lineWidth = 10;
-    ctx.strokeStyle = color;
-    ctx.stroke();
-    // Auto-fit: shrink the type until the line fits the plate.
-    let size = 84;
-    do {
-      ctx.font = `900 ${size}px system-ui, -apple-system, sans-serif`;
-      size -= 4;
-    } while (size > 28 && ctx.measureText(text).width > w - 150);
-    ctx.fillStyle = color;
-    ctx.fillText(text, w / 2, h / 2 + 4);
-    this.signTex.needsUpdate = true;
   }
 }
 

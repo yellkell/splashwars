@@ -2,8 +2,8 @@
  * The game's front door and back door — title screen and game over, both
  * built from the same pointer-driven CardBoard as the upgrades.
  *
- * TITLE: the banner hangs in the air, a "how to play" plate sits over the
- * two MODE cards — DEFENSE and DUEL. Point at one and pull the trigger.
+ * TITLE: a "how to play" plate sits over the MODE cards. Point at one and
+ * pull the trigger. No floating signage — the cards ARE the title screen.
  *
  * GAME OVER: your run's numbers on a plate (wave, kills, score), with AGAIN
  * and MENU cards under it. AGAIN drops you straight into wave 1.
@@ -16,7 +16,6 @@ import { createSystem, Vector3 } from '@iwsdk/core';
 import { CanvasTexture, Mesh, MeshBasicMaterial, PlaneGeometry } from 'three';
 import { CardBoard } from '../ui/cardBoard.js';
 import { crispTexture, logicalCanvas } from '../ui/crispCanvas.js';
-import { setTitleBannerVisible } from '../arena/banner.js';
 import { app } from '../game/appState.js';
 import { resetRun, run } from '../game/run.js';
 import { resetTower, tower } from '../game/tower.js';
@@ -92,17 +91,10 @@ export class MenuSystem extends createSystem({}) {
       sfx.waveHorn();
     } else {
       app.phase = 'placing';
-      this.world
-        .getSystem(EnemySystem)
-        ?.setSign('POINT AT THE FLOOR — PLANT THE TOWER', '#1fc4c9');
     }
   }
 
   update(delta: number): void {
-    // The big SPLASH WARS sign belongs to the title screen ONLY — during a
-    // fight it's clutter floating over the wave lane.
-    setTitleBannerVisible(app.phase === 'title' && !this.shownFor.startsWith('loadout'));
-
     // Show/refresh the board when the phase asks for one.
     if (app.phase === 'title' && this.shownFor === '') this.showTitle();
     if (app.phase === 'gameover' && this.shownFor !== 'gameover') this.showGameOver();

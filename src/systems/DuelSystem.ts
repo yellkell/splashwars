@@ -44,7 +44,6 @@ import {
 } from 'three';
 import { glossyPlastic, mattePlastic } from '../materials/plastic.js';
 import { CardBoard, menuClick } from '../ui/cardBoard.js';
-import { EnemySystem } from './EnemySystem.js';
 import { WeaponSystem } from './WeaponSystem.js';
 import { sharedTurretAssets } from './TurretSystem.js';
 import { addBallTarget, clearBallTargets, type BallTarget } from '../combat/targets.js';
@@ -261,7 +260,6 @@ export class DuelSystem extends createSystem({}) {
     this.addMiner(); // one free worker — the StarCraft opening
     this.addEnemyMinerBot();
     this.world.getSystem(WeaponSystem)?.refillAll(1);
-    this.world.getSystem(EnemySystem)?.setSign('MINE THE CRYSTALS — Y OPENS THE SHOP', '#63c4ff');
   }
 
   update(delta: number): void {
@@ -588,7 +586,6 @@ export class DuelSystem extends createSystem({}) {
             sfx.hitSplat();
             if (c.left <= 0) {
               this.exhaustCrystal(c);
-              this.world.getSystem(EnemySystem)?.setSign('THEIR PATCH IS DOWN', '#f0299b');
             }
             return true;
           },
@@ -626,7 +623,6 @@ export class DuelSystem extends createSystem({}) {
             sfx.towerHit();
             if (c.left <= 0) {
               this.exhaustCrystal(c);
-              this.world.getSystem(EnemySystem)?.setSign('YOUR PATCH IS DOWN', '#e0312e');
             }
             return true;
           },
@@ -830,9 +826,6 @@ export class DuelSystem extends createSystem({}) {
       list[idx] = null;
       if (!mineSide) this.enemyShieldBrokenAt[idx] = this.time;
     }
-    this.world
-      .getSystem(EnemySystem)
-      ?.setSign(mineSide ? 'YOUR PANEL SHATTERED' : 'THEIR PANEL SHATTERED', mineSide ? '#e0312e' : '#f0299b');
   }
 
   private updateShieldPlacing(): void {
@@ -1133,7 +1126,6 @@ export class DuelSystem extends createSystem({}) {
     run.endReason = 'win';
     run.score += 1000;
     app.phase = 'gameover';
-    this.world.getSystem(EnemySystem)?.setSign("THEY'RE SOAKED", '#f0299b');
   }
 
   // --- The duel shop. ------------------------------------------------------

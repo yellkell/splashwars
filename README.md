@@ -282,7 +282,7 @@ src/
   game/loadout.ts         seven tool profiles + saved ordered six slots
   campaign/               saved route data + FIRE FIGHT telegraph shaders
   goopliath/              raymarched gel body, sim, poses and pooled mess
-  arena/                  static set-dressing: deck, lighting, title banner
+  arena/                  static set-dressing: lighting
   components/             ECS data: WaterPistol
   game/appState.ts        title/map/playing/gameover flow + current mode
   ui/cardBoard.ts         the ONE menu primitive: point-and-click cards

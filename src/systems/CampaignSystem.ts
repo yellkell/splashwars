@@ -373,7 +373,6 @@ export class CampaignSystem extends createSystem({}) {
     this.phase = 'swarm';
     this.world.getSystem(EnemySystem)?.startCampaignEncounter(spec);
     this.world.getSystem(WeaponSystem)?.refillAll(1);
-    this.world.getSystem(EnemySystem)?.setSign(`${node.title} • ${node.subtitle}`, node.accent);
   }
 
   private completeNode(): void {
@@ -390,7 +389,6 @@ export class CampaignSystem extends createSystem({}) {
     }
 
     this.phase = 'reward';
-    this.world.getSystem(EnemySystem)?.setSign('CHOOSE YOUR POWER', '#58dc76');
     upgradeGate.afterPick = () => {
       saveCampaignLoadout(run.stacks);
       this.openMap();
@@ -563,7 +561,6 @@ export class CampaignSystem extends createSystem({}) {
     this.hud.position.copy(this.bossPos).setY(formHeight * 1.82 + 0.55);
     this.hud.visible = true;
     this.drawHud();
-    this.world.getSystem(EnemySystem)?.setSign(def.name, visual.uiAccent);
     this.world.getSystem(WeaponSystem)?.refillAll(1);
     sfx.gooRise();
   }
@@ -647,7 +644,6 @@ export class CampaignSystem extends createSystem({}) {
     if (!this.enraged && this.bossDef && this.bossDef.enrageAt > 0 && frac <= this.bossDef.enrageAt) {
       this.enraged = true;
       this.hudCue = 'THE TIDE RISES';
-      this.world.getSystem(EnemySystem)?.setSign('THE TIDE RISES', '#e0312e');
       sfx.enemyPop();
     }
     if (this.bossHealth <= 0) this.beginVictory();
@@ -661,7 +657,6 @@ export class CampaignSystem extends createSystem({}) {
     this.victoryTimer = CAMPAIGN.victoryTime;
     this.hudCue = 'TIDE BROKEN';
     this.drawHud();
-    this.world.getSystem(EnemySystem)?.setSign('GOOPLIATH DOWN', this.bossVisual?.uiAccent ?? '#58dc76');
     sfx.enemyPop();
   }
 
