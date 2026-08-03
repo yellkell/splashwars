@@ -67,6 +67,7 @@ const _vel = new Vector3();
 const _axis = new Vector3();
 const _spawnVel = new Vector3();
 const _curve = new Vector3();
+const _aim = new Vector3();
 const _worldScale = new Vector3();
 const _worldPos = new Vector3();
 const _targetPoint = new Vector3();
@@ -818,25 +819,35 @@ export class WeaponSystem extends createSystem({
     power: number,
   ): void {
     rig.nozzle.getWorldPosition(_nozzle);
-    rig.nozzle.getWorldDirection(_dir);
-    _dir.negate(); // getWorldDirection returns +Z; the muzzle faces -Z
+    rig.nozzle.getWorldDirection(_aim);
+    _aim.negate(); // getWorldDirection returns +Z; the muzzle faces -Z
 
-    // Cone spread — a lob, not a laser.
-    _dir.x += (Math.random() - 0.5) * 2 * def.spread;
-    _dir.y += (Math.random() - 0.5) * 2 * def.spread;
-    _dir.z += (Math.random() - 0.5) * 2 * def.spread;
-    _dir.normalize();
-
-    const speed = def.muzzleSpeed * (0.78 + 0.22 * pull) * power;
-    _spawnVel.copy(_dir).multiplyScalar(speed).addScaledVector(handVel, PISTOL.inheritVel);
-    _curve.copy(handVel).addScaledVector(_dir, -handVel.dot(_dir));
+    // The whole cone shares ONE curve, taken from the barrel's true axis —
+    // so an Ellipse shotgun banks as a single flock, not a fan of strays.
+    _curve.copy(handVel).addScaledVector(_aim, -handVel.dot(_aim));
     if (_curve.length() > 3.2) _curve.setLength(3.2);
     _curve.multiplyScalar(def.curveStrength);
     _blobProfile.radius = def.radius;
     _blobProfile.gravity = def.gravity;
     _blobProfile.lifetime = def.lifetime;
     _blobProfile.damageScale = def.damageScale;
-    squirtBlob(_nozzle, _spawnVel, _blobProfile);
+
+    const pellets = def.pellets ?? 1;
+    for (let n = 0; n < pellets; n++) {
+      _dir.copy(_aim);
+      // Cone spread — a lob, not a laser. Shotgun pellets take the same
+      // treatment, just far wider, so the cone opens with distance.
+      _dir.x += (Math.random() - 0.5) * 2 * def.spread;
+      _dir.y += (Math.random() - 0.5) * 2 * def.spread;
+      _dir.z += (Math.random() - 0.5) * 2 * def.spread;
+      _dir.normalize();
+      // Pellets leave at slightly different speeds so the cloud stretches
+      // as it flies instead of travelling as one rigid disc.
+      const jitter = pellets > 1 ? 0.88 + Math.random() * 0.24 : 1;
+      const speed = def.muzzleSpeed * (0.78 + 0.22 * pull) * power * jitter;
+      _spawnVel.copy(_dir).multiplyScalar(speed).addScaledVector(handVel, PISTOL.inheritVel);
+      squirtBlob(_nozzle, _spawnVel, _blobProfile);
+    }
 
     // An Ellipse round that actually caught your swing gets its whistle,
     // scaled by how hard it is bending. A straight pull stays silent.
@@ -871,6 +882,9 @@ export class WeaponSystem extends createSystem({
         break;
       case 'viper':
         sfx.viperShot();
+        break;
+      case 'shotgun':
+        sfx.shotgunShot();
         break;
       default:
         sfx.squirtShot();

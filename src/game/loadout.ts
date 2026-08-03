@@ -10,6 +10,8 @@ export const ToolId = {
   Raptor: 'raptor',
   Wildcat: 'wildcat',
   Viper: 'viper',
+  Shotgun: 'shotgun',
+  ShotgunEllipse: 'shotgun-ellipse',
   RaptorEllipse: 'raptor-ellipse',
   ViperEllipse: 'viper-ellipse',
   SplashGrenade: 'splash-grenade',
@@ -23,7 +25,7 @@ export interface ToolDefinition {
   id: ToolIdT;
   name: string;
   shortName: string;
-  family: 'raptor' | 'wildcat' | 'viper' | 'grenade';
+  family: 'raptor' | 'wildcat' | 'viper' | 'shotgun' | 'grenade';
   kind: ToolKind;
   blurb: string;
   color: string;
@@ -42,6 +44,8 @@ export interface ToolDefinition {
   curveStrength: number;
   /** Muzzle-rise recoil at full kick, radians — decays over ~0.15 s. */
   kick: number;
+  /** Balls per trigger pull. >1 is a shot CONE (the shotguns). */
+  pellets?: number;
   respawn: number;
   haptic: number;
   visualScale: readonly [number, number, number];
@@ -101,7 +105,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     kick: 0.03,
     respawn: 2.8,
     haptic: 0.3,
-    visualScale: [0.76, 0.78, 0.78],
+    visualScale: [0.94, 0.94, 0.94],
   },
   {
     id: ToolId.Viper,
@@ -124,7 +128,55 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     kick: 0.17,
     respawn: 4.8,
     haptic: 1,
-    visualScale: [0.92, 0.96, 1.34],
+    visualScale: [1, 1, 1],
+  },
+  {
+    id: ToolId.Shotgun,
+    name: 'SHOTGUN',
+    shortName: 'SHOTGUN',
+    family: 'shotgun',
+    kind: 'gun',
+    blurb: 'Eight fat pellets at once. Devastating close, useless far.',
+    color: '#ff7a2f',
+    shots: 5,
+    fireRate: 1.05,
+    automatic: false,
+    muzzleSpeed: 9.6,
+    spread: 0.075,
+    radius: 0.031,
+    gravity: 1.5,
+    lifetime: 1.5,
+    damageScale: 0.52,
+    curveStrength: 0,
+    kick: 0.24,
+    pellets: 8,
+    respawn: 4.2,
+    haptic: 1,
+    visualScale: [1, 1, 1],
+  },
+  {
+    id: ToolId.ShotgunEllipse,
+    name: 'SHOTGUN ELLIPSE',
+    shortName: 'SHOT ELL.',
+    family: 'shotgun',
+    kind: 'gun',
+    blurb: 'The whole cone banks with the swing of your arm.',
+    color: '#ff5fa8',
+    shots: 4,
+    fireRate: 0.95,
+    automatic: false,
+    muzzleSpeed: 9.2,
+    spread: 0.07,
+    radius: 0.03,
+    gravity: 1.45,
+    lifetime: 1.9,
+    damageScale: 0.5,
+    curveStrength: 4.4,
+    kick: 0.24,
+    pellets: 8,
+    respawn: 4.8,
+    haptic: 1,
+    visualScale: [1, 1, 1],
   },
   {
     id: ToolId.RaptorEllipse,
@@ -170,7 +222,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     kick: 0.17,
     respawn: 5.2,
     haptic: 1,
-    visualScale: [0.92, 0.96, 1.34],
+    visualScale: [1, 1, 1],
   },
   {
     id: ToolId.SplashGrenade,

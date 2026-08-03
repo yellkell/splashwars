@@ -71,6 +71,18 @@ no models, no textures, no sounds shipped.
   Balls fly fat and fast enough to have real snap on a flat-ish arc — you
   still have to dodge them — and enemy return fire speaks the same
   language.
+- **Nine tools, nine silhouettes** — every family has its own chassis, so
+  you name a tool across the pad by OUTLINE, not colour: the RAPTOR
+  service pistol, the WILDCAT (stubby, wide, drum tank lying crosswise
+  like a Tommy gun), the VIPER (long, lean, scoped marksman rifle), and
+  the SHOTGUN — a broad flat breacher with a fat shrouded barrel, four
+  muzzle ports in a square, a pump grip and twin bottles slung side by
+  side. It throws EIGHT fat pellets per pull at 1.05/s: devastating in
+  someone's face, useless past a few metres. ELLIPSE variants of the
+  Raptor, Viper and Shotgun wear a curved spine arcing over the tank on
+  struts plus flank rails — the bend made physical. The Ellipse Shotgun
+  banks its whole cone as one flock, because every pellet takes the same
+  curve vector off the barrel axis. Two throwable grenades round it out.
 - **Damage numbers** — white digits with thick black outlines popping off
   every hit (bigger and gold for blasts), drawn from one instanced digit
   atlas so hundreds of hit markers cost a single draw call.

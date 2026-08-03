@@ -257,6 +257,21 @@ export function viperShot(): void {
 }
 
 /**
+ * SHOTGUN — a wet BOOM. A wide, fast noise slam for the cone leaving the
+ * ports, a deep body under it, and a plastic pump-rack a beat later so the
+ * long cadence between shells has something to fill it.
+ */
+export function shotgunShot(): void {
+  noiseBurst(760, 0.5, 0.09, 0.55, 150);
+  blip(170, 36, 0.22, 0.5);
+  bloop(280, 150, 520, 0.16, 0.3);
+  noiseBurst(2100, 1.1, 0.16, 0.13, 380);
+  // The rack: two plastic clacks as the pump cycles a fresh shell in.
+  setTimeout(() => noiseBurst(1400, 3.0, 0.03, 0.13, 800), 190);
+  setTimeout(() => noiseBurst(1100, 3.0, 0.035, 0.11, 620), 300);
+}
+
+/**
  * The Ellipse bend — a doppler-ish whistle that rises as the round banks
  * and falls away down-range. Scaled by how hard the punch actually curved
  * the shot, so a straight pull stays silent and a full swing HOWLS.
