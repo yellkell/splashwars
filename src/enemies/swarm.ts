@@ -173,8 +173,13 @@ const FRAG = /* glsl */ `
       if (field < cover) {
         vec3 juice = mix(uJuiceDeep, uJuice, up * 0.7 + 0.3);
         juice = mix(juice, vec3(1.0, 0.72, 0.88), smoothstep(cover - 0.06, cover - 0.005, field) * 0.6);
-        // …and a much hotter, tighter glint on the wet juice itself.
-        col = juice + pow(specDot, 90.0) * 0.9;
+        // …and a WET, two-lobe glint on the juice itself: a broad sheen
+        // under a tight hot pin, plus a fresnel film at the silhouette.
+        // Juiced machines should look lacquered, not painted.
+        col = juice
+            + pow(specDot, 26.0) * 0.28
+            + pow(specDot, 170.0) * 1.35
+            + rim * 0.4;
       }
     }
 

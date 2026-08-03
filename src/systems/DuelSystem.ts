@@ -43,7 +43,7 @@ import {
   type Object3D,
 } from 'three';
 import { glossyPlastic, mattePlastic } from '../materials/plastic.js';
-import { CardBoard } from '../ui/cardBoard.js';
+import { CardBoard, menuClick } from '../ui/cardBoard.js';
 import { EnemySystem } from './EnemySystem.js';
 import { WeaponSystem } from './WeaponSystem.js';
 import { sharedTurretAssets } from './TurretSystem.js';
@@ -862,7 +862,8 @@ export class DuelSystem extends createSystem({}) {
       const pressed = gp?.getButtonPressed(InputComponent.Trigger) ?? false;
       const down = pressed && !this.triggerWas[hand];
       this.triggerWas[hand] = pressed;
-      if (!down) continue;
+      // The press that BOUGHT this ghost must not also plant it.
+      if (!down || menuClick.cooldown > 0) continue;
       if (this.hoverSlot < 0 || this.myShields[this.hoverSlot]) {
         sfx.denied();
         return;
@@ -933,7 +934,8 @@ export class DuelSystem extends createSystem({}) {
       const pressed = gp?.getButtonPressed(InputComponent.Trigger) ?? false;
       const down = pressed && !this.triggerWas[hand];
       this.triggerWas[hand] = pressed;
-      if (!down) continue;
+      // The press that BOUGHT this ghost must not also plant it.
+      if (!down || menuClick.cooldown > 0) continue;
       if (this.myTurrets.length >= DUEL.turretMax || !spendDrops(DUEL.turretCost)) {
         sfx.denied();
         build.placing = null;

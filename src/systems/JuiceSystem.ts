@@ -11,7 +11,7 @@
  *    hundreds of enemies × dozens of balls affordable;
  *  - on a hit, deals damage (scaled by your HEAVY JUICE stacks), pops a
  *    damage number, and requests a burst blast if you have SPLASH;
- *  - tests the upgrade cards while the board is up (you pick by shooting);
+ *  - tests duel targets (crystals, shields, the rival) via the registry;
  *  - tests the floor — a landing stamps a pooled splat decal and plops.
  *
  * Enemy return fire flies in the same loop with the same physics, but tests
@@ -20,7 +20,6 @@
 
 import { createSystem, Vector3 } from '@iwsdk/core';
 import { EnemySystem } from './EnemySystem.js';
-import { activeBoards } from '../ui/cardBoard.js';
 import {
   pendingBlobs,
   pendingEnemyShots,
@@ -161,16 +160,6 @@ export class JuiceSystem extends createSystem({}) {
                 sfx.hitSplat();
                 this.splatSfxAcc = 0.06;
               }
-              hit = true;
-              break;
-            }
-          }
-        }
-
-        // --- Your juice vs any card board on screen (menus, upgrades). ---
-        if (!hit) {
-          for (const board of activeBoards) {
-            if (board.testHit(_pos, radius)) {
               hit = true;
               break;
             }

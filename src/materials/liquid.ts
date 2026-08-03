@@ -124,8 +124,18 @@ const LIQUID_FRAG = /* glsl */ `
     vec3 n = normalize(vWorldNormal);
     vec3 lightDir = normalize(vec3(0.35, 0.85, 0.4));
     vec3 viewDir = normalize(cameraPosition - vWorldPos);
-    float spec = pow(max(dot(n, normalize(lightDir + viewDir)), 0.0), 80.0);
-    col += spec * 0.85;
+    vec3 h = normalize(lightDir + viewDir);
+    // Two lobes: a broad wet sheen plus a tight hot pin inside it. Glass
+    // gloss is that contrast — a soft glow alone just looks washed out.
+    float ndh = max(dot(n, h), 0.0);
+    col += pow(ndh, 34.0) * 0.35;
+    col += pow(ndh, 190.0) * 1.15;
+    // A second, cooler glint from the opposite side keeps the far edge of
+    // the liquid alive as the tank rolls.
+    float ndh2 = max(dot(n, normalize(normalize(vec3(-0.5, 0.55, -0.35)) + viewDir)), 0.0);
+    col += pow(ndh2, 90.0) * 0.32 * vec3(0.75, 0.9, 1.0);
+    // Fresnel skin: the surface turns to a bright film at grazing angles.
+    col += pow(1.0 - max(dot(n, viewDir), 0.0), 4.0) * 0.28;
     // FULLY OPAQUE: thick juice is not see-through. Anything less and you
     // catch the tank's far wall (and the room) straight through the liquid.
     gl_FragColor = vec4(col, 1.0);

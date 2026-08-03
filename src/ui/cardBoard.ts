@@ -1,17 +1,18 @@
 /**
  * CardBoard — the game's ONE menu primitive.
  *
- * A row of frosted plastic cards floating in front of you, and you choose
- * by SHOOTING the one you want: juice accumulates on the card face and once
- * coverage passes the threshold, that card is picked. No laser pointers, no
- * ray-and-click, no wrist menus — the menu speaks the same verb as the rest
- * of the game, which is what makes it feel like a VR-native product rather
- * than a ported settings dialog.
+ * A grid of frosted plastic cards floating in front of you, chosen with a
+ * POINTER: a beam leaves your hand down the same aim axis the pistol barrel
+ * uses, a cursor lands on the card under it, and the trigger clicks it
+ * (systems/PointerSystem.ts drives all of that). Menus used to be picked by
+ * HOSING them with juice, which was novel for about four seconds and then
+ * just slow — you had to draw a gun to answer a menu, and every choice cost
+ * you half a tank.
  *
- * Used by UpgradeSystem (the between-wave choices) and MenuSystem (title
- * screen, game over). Every shown board registers itself in `activeBoards`,
- * and JuiceSystem tests live juice balls against every active board — so a
- * menu card is hit by exactly the same projectiles that pop enemies.
+ * Used by UpgradeSystem (between-wave choices), MenuSystem (title, game
+ * over), TurretSystem (the defense shop) and DuelSystem (the duel shop).
+ * Every shown board registers itself in `activeBoards`; PointerSystem
+ * raycasts them all and drives hover/click.
  */
 
 import {
@@ -20,16 +21,24 @@ import {
   Mesh,
   MeshBasicMaterial,
   PlaneGeometry,
+  Raycaster,
   Vector3,
   type Scene,
 } from 'three';
 import { crispTexture, logicalCanvas } from './crispCanvas.js';
-import { dropletBurst } from '../fx/juice.js';
 import * as sfx from '../audio/sfx.js';
 import { UPGRADES } from '../config.js';
 
 const CARD_PX_W = 512;
 const CARD_PX_H = 668;
+
+/**
+ * Hit padding, metres. A hand-held cursor at arm's length wanders a couple
+ * of centimetres no matter how steady you are, so every card catches the
+ * ray a little beyond its printed edge — the difference between a pointer
+ * that feels magnetic and one that feels like threading a needle.
+ */
+const HIT_PAD = 0.07;
 
 export interface CardSpec {
   id: string;
@@ -47,26 +56,41 @@ export interface CardSpec {
 interface Card {
   group: Group;
   mesh: Mesh;
+  /** Invisible, slightly oversized plane used ONLY for pointer hits. */
+  hitMesh: Mesh;
   canvas: HTMLCanvasElement;
   tex: CanvasTexture;
   spec: CardSpec;
   w: number;
   h: number;
-  fill: number;
-  splats: { x: number; y: number; r: number }[];
+  /** Drawn state, so we only repaint the canvas when something changes. */
+  drawnHover: boolean;
+  drawnAfford: boolean;
+  affordable: boolean;
+  /** Countdown of the refusal shake, seconds. */
+  shake: number;
 }
 
-/** Every board currently on screen — JuiceSystem tests balls against these. */
+/** Every board currently on screen — PointerSystem raycasts these. */
 export const activeBoards = new Set<CardBoard>();
 
-const _local = new Vector3();
+/**
+ * Set when the pointer consumes a trigger press on a menu. While it's
+ * counting down, firing and ghost-planting stay locked out, so the click
+ * that picks a card can't also squirt juice or plant a turret the instant
+ * the board disappears. PointerSystem owns the countdown.
+ */
+export const menuClick = { cooldown: 0 };
+
 const _cam = new Vector3();
+const _ray = new Raycaster();
 
 export class CardBoard {
   private board = new Group();
   private cards: Card[] = [];
   private onPick: ((id: string) => void) | undefined;
   private canPick: ((id: string) => boolean) | undefined;
+  private hover = -1;
   private time = 0;
 
   constructor(private scene: Scene) {
@@ -84,8 +108,8 @@ export class CardBoard {
       y?: number;
       distance?: number;
       onPick: (id: string) => void;
-      /** Gate a pick (e.g. affordability). Denied cards shake off their
-       * juice and stay on the board instead of resolving. */
+      /** Gate a pick (e.g. affordability). Cards that fail render dimmed,
+       * and clicking one shakes it with a dead buzz instead of resolving. */
       canPick?: (id: string) => boolean;
       /** Grid layout: cards per row (default: everything on one row). */
       perRow?: number;
@@ -94,6 +118,7 @@ export class CardBoard {
     this.clear();
     this.onPick = opts.onPick;
     this.canPick = opts.canPick;
+    this.hover = -1;
 
     // Lay out as a centred grid, respecting per-card scale.
     const perRow = opts.perRow ?? specs.length;
@@ -110,6 +135,7 @@ export class CardBoard {
         const card = this.buildCard(rowSpecs[i]);
         card.group.position.set(x + widths[i] / 2, yTop - r * rowH, 0);
         card.group.userData.baseY = yTop - r * rowH;
+        card.group.userData.baseX = x + widths[i] / 2;
         x += widths[i] + UPGRADES.cardGap;
         this.board.add(card.group);
         this.cards.push(card);
@@ -124,43 +150,96 @@ export class CardBoard {
 
   hide(): void {
     this.board.visible = false;
+    this.hover = -1;
     activeBoards.delete(this);
     this.clear();
   }
 
-  /** Face the player and idle-bob. Call once per frame. */
+  /** Face the player, idle-bob, and keep affordability current. */
   update(dt: number, camWorldPos: Vector3): void {
     if (!this.board.visible) return;
     this.time += dt;
     _cam.copy(camWorldPos);
     this.board.lookAt(_cam.x, this.board.position.y, _cam.z);
     for (let i = 0; i < this.cards.length; i++) {
-      const base = (this.cards[i].group.userData.baseY as number) ?? 0;
-      this.cards[i].group.position.y = base + Math.sin(this.time * 1.7 + i * 1.3) * 0.012;
+      const card = this.cards[i];
+      const baseY = (card.group.userData.baseY as number) ?? 0;
+      const baseX = (card.group.userData.baseX as number) ?? 0;
+      const hovered = i === this.hover;
+      card.group.position.y = baseY + Math.sin(this.time * 1.7 + i * 1.3) * 0.012;
+      // Refusal shake: the card jitters sideways and settles.
+      if (card.shake > 0) {
+        card.shake = Math.max(0, card.shake - dt);
+        card.group.position.x = baseX + Math.sin(this.time * 70) * 0.018 * card.shake * 4;
+      } else {
+        card.group.position.x = baseX;
+      }
+      // Hovered cards lift toward you a touch — depth does the pop, so a
+      // cursor never has to fight a busy card face to read as "selected".
+      const targetZ = hovered ? 0.045 : 0;
+      card.group.position.z += (targetZ - card.group.position.z) * Math.min(1, dt * 14);
+      const targetS = hovered ? 1.05 : 1;
+      const s = card.group.scale.x + (targetS - card.group.scale.x) * Math.min(1, dt * 14);
+      card.group.scale.setScalar(s);
+
+      const affordable = this.canPick ? this.canPick(card.spec.id) : true;
+      if (affordable !== card.affordable) card.affordable = affordable;
+      if (card.drawnHover !== hovered || card.drawnAfford !== affordable) this.drawCard(card);
     }
   }
 
-  /** Test a juice ball; true consumes the ball (it splatted on a card). */
-  testHit(pos: Vector3, radius: number): boolean {
-    if (!this.board.visible) return false;
-    for (const card of this.cards) {
-      card.mesh.worldToLocal(_local.copy(pos));
-      const halfW = card.w / 2;
-      const halfH = card.h / 2;
-      if (
-        Math.abs(_local.z) <= radius + 0.05 &&
-        _local.x >= -halfW - radius &&
-        _local.x <= halfW + radius &&
-        _local.y >= -halfH - radius &&
-        _local.y <= halfH + radius
-      ) {
-        this.juiceCard(card, _local.x / card.w + 0.5, 0.5 - _local.y / card.h);
-        dropletBurst(pos, 7, 0.8);
-        sfx.hitSplat();
-        return true;
-      }
+  /**
+   * Ray vs this board. Returns the hit distance and the card index, or null.
+   * `outPoint` receives the world-space hit point (the cursor goes there).
+   */
+  hitTest(origin: Vector3, dir: Vector3, outPoint: Vector3): { index: number; distance: number } | null {
+    if (!this.board.visible || this.cards.length === 0) return null;
+    _ray.set(origin, dir);
+    _ray.far = 12;
+    const hits = _ray.intersectObjects(
+      this.cards.map((c) => c.hitMesh),
+      false,
+    );
+    if (hits.length === 0) return null;
+    const hit = hits[0];
+    const index = this.cards.findIndex((c) => c.hitMesh === hit.object);
+    if (index < 0) return null;
+    outPoint.copy(hit.point);
+    return { index, distance: hit.distance };
+  }
+
+  /** Highlight a card (-1 = nothing). Returns true if the hover changed. */
+  setHover(index: number): boolean {
+    if (this.hover === index) return false;
+    this.hover = index;
+    return true;
+  }
+
+  get hovered(): number {
+    return this.hover;
+  }
+
+  /** Is the card at `index` currently pickable? (Drives the cursor colour.) */
+  affordableAt(index: number): boolean {
+    const card = this.cards[index];
+    return card ? card.affordable : true;
+  }
+
+  /** Click whatever is hovered. Returns true if a pick actually resolved. */
+  activateHover(): boolean {
+    if (this.hover < 0 || this.hover >= this.cards.length) return false;
+    const card = this.cards[this.hover];
+    const id = card.spec.id;
+    if (this.canPick && !this.canPick(id)) {
+      card.shake = 0.25;
+      sfx.denied();
+      return false;
     }
-    return false;
+    const pick = this.onPick;
+    this.hide();
+    sfx.upgradePick();
+    pick?.(id);
+    return true;
   }
 
   // --- Internals. ----------------------------------------------------------
@@ -170,6 +249,8 @@ export class CardBoard {
       card.tex.dispose();
       (card.mesh.material as MeshBasicMaterial).dispose();
       card.mesh.geometry.dispose();
+      (card.hitMesh.material as MeshBasicMaterial).dispose();
+      card.hitMesh.geometry.dispose();
       this.board.remove(card.group);
     }
     this.cards.length = 0;
@@ -186,56 +267,53 @@ export class CardBoard {
       new PlaneGeometry(w, h),
       new MeshBasicMaterial({ map: tex, transparent: true }),
     );
+    // The pointer target: bigger than the art, and invisible via the
+    // MATERIAL (an invisible Object3D would be skipped by the raycaster).
+    const hitMesh = new Mesh(
+      new PlaneGeometry(w + HIT_PAD, h + HIT_PAD),
+      new MeshBasicMaterial({ visible: false }),
+    );
     const group = new Group();
-    group.add(mesh);
-    const card: Card = { group, mesh, canvas, tex, spec, w, h, fill: 0, splats: [] };
+    group.add(mesh, hitMesh);
+    const card: Card = {
+      group,
+      mesh,
+      hitMesh,
+      canvas,
+      tex,
+      spec,
+      w,
+      h,
+      drawnHover: false,
+      drawnAfford: true,
+      affordable: true,
+      shake: 0,
+    };
     this.drawCard(card);
     return card;
   }
 
-  private juiceCard(card: Card, u: number, v: number): void {
-    // Fat splats: a card falls to ~3 balls — picking is a beat, not a chore.
-    card.splats.push({
-      x: u * CARD_PX_W,
-      y: v * CARD_PX_H,
-      r: 70 + Math.random() * 50,
-    });
-    const area = card.splats.reduce((sum, s) => sum + Math.PI * s.r * s.r, 0);
-    card.fill = Math.min(1, area / (CARD_PX_W * CARD_PX_H) / 1.35);
-    this.drawCard(card);
-
-    if (card.fill >= UPGRADES.juiceToPick) {
-      const id = card.spec.id;
-      if (this.canPick && !this.canPick(id)) {
-        // Can't afford it: the card shakes the juice off and stays up.
-        card.splats.length = 0;
-        card.fill = 0;
-        this.drawCard(card);
-        sfx.denied();
-        return;
-      }
-      const pick = this.onPick;
-      this.hide();
-      sfx.upgradePick();
-      pick?.(id);
-    }
-  }
-
   private drawCard(card: Card): void {
     const ctx = card.canvas.getContext('2d')!;
-    const { spec, fill } = card;
+    const { spec } = card;
+    const hovered = this.cards[this.hover] === card;
+    const affordable = card.affordable;
+    card.drawnHover = hovered;
+    card.drawnAfford = affordable;
     const W = CARD_PX_W;
     const H = CARD_PX_H;
     ctx.clearRect(0, 0, W, H);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    // Unaffordable cards sit back: everything but the price greys out.
+    ctx.globalAlpha = affordable ? 1 : 0.55;
 
-    // Frosted plastic card with the accent rim.
-    ctx.fillStyle = 'rgba(250,252,255,0.93)';
+    // Frosted plastic card with the accent rim, brighter under the cursor.
+    ctx.fillStyle = hovered ? 'rgba(255,255,255,0.99)' : 'rgba(250,252,255,0.93)';
     ctx.beginPath();
     ctx.roundRect(12, 12, W - 24, H - 24, 48);
     ctx.fill();
-    ctx.lineWidth = 14;
+    ctx.lineWidth = hovered ? 22 : 14;
     ctx.strokeStyle = spec.color;
     ctx.stroke();
 
@@ -270,34 +348,15 @@ export class CardBoard {
       ctx.fillText(spec.footnote, W / 2, 486);
     }
 
-    ctx.fillStyle = '#9fb0ba';
-    ctx.font = '800 30px system-ui, sans-serif';
-    ctx.fillText('SHOOT TO PICK', W / 2, H - 62);
-
-    // The juice the player has already landed, with a wet highlight per splat.
-    for (const s of card.splats) {
-      ctx.fillStyle = '#f0299b';
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-      ctx.fill();
-      for (let n = 0; n < 3; n++) {
-        const a = Math.random() * Math.PI * 2;
-        const d = s.r * (1.1 + Math.random() * 0.5);
-        ctx.beginPath();
-        ctx.arc(s.x + Math.cos(a) * d, s.y + Math.sin(a) * d, s.r * 0.22, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.fillStyle = 'rgba(255,255,255,0.4)';
-      ctx.beginPath();
-      ctx.ellipse(s.x - s.r * 0.3, s.y - s.r * 0.35, s.r * 0.34, s.r * 0.2, -0.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Progress bar along the bottom so the threshold is legible.
-    ctx.fillStyle = 'rgba(0,0,0,0.15)';
-    ctx.fillRect(40, H - 34, W - 80, 14);
-    ctx.fillStyle = '#f0299b';
-    ctx.fillRect(40, H - 34, (W - 80) * Math.min(1, fill / UPGRADES.juiceToPick), 14);
+    // The call to action doubles as the hover read.
+    ctx.fillStyle = hovered ? spec.color : '#9fb0ba';
+    ctx.font = '800 32px system-ui, sans-serif';
+    ctx.fillText(
+      !affordable ? "CAN'T AFFORD" : hovered ? 'PULL TRIGGER' : 'POINT TO SELECT',
+      W / 2,
+      H - 58,
+    );
+    ctx.globalAlpha = 1;
 
     card.tex.needsUpdate = true;
   }

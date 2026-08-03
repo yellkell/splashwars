@@ -15,21 +15,31 @@ import { MeshPhysicalMaterial, MeshStandardMaterial, type ColorRepresentation } 
 export function wetJuice(color: ColorRepresentation): MeshPhysicalMaterial {
   return new MeshPhysicalMaterial({
     color,
-    roughness: 0.05,
+    // As glossy as the renderer goes: a mirror-smooth base under a
+    // mirror-smooth clearcoat, with the environment cranked so the
+    // poolside IBL rolls across every ball as it flies.
+    roughness: 0.012,
     metalness: 0,
     clearcoat: 1,
-    clearcoatRoughness: 0.03,
+    clearcoatRoughness: 0.008,
+    envMapIntensity: 1.8,
+    specularIntensity: 1,
+    // A faint bright sheen at grazing angles — the wet skin on a droplet.
+    sheen: 0.5,
+    sheenRoughness: 0.25,
+    sheenColor: 0xffffff,
   });
 }
 
 /** Glossy injection-moulded shell — pistol bodies, deck rim, enemy shells. */
-export function glossyPlastic(color: ColorRepresentation, roughness = 0.28): MeshPhysicalMaterial {
+export function glossyPlastic(color: ColorRepresentation, roughness = 0.22): MeshPhysicalMaterial {
   return new MeshPhysicalMaterial({
     color,
     roughness,
     metalness: 0,
-    clearcoat: 0.9,
-    clearcoatRoughness: 0.18,
+    clearcoat: 1,
+    clearcoatRoughness: 0.1,
+    envMapIntensity: 1.4,
   });
 }
 

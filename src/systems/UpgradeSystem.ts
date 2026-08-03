@@ -1,5 +1,5 @@
 /**
- * The between-wave upgrade choice — three cards on the shared shoot-to-pick
+ * The between-wave upgrade choice — three cards on the shared pointer-driven
  * CardBoard (ui/cardBoard.ts). EnemySystem raises `upgradeGate.pending`
  * when a wave clears; this system shows the offer, applies the pick, and
  * hands control back to the wave director.

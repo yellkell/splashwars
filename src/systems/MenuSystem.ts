@@ -1,10 +1,9 @@
 /**
  * The game's front door and back door — title screen and game over, both
- * built from the same shoot-to-pick CardBoard as the upgrades.
+ * built from the same pointer-driven CardBoard as the upgrades.
  *
- * TITLE: the banner hangs in the air, a stats-free "how to play" plate sits
- * over a big START card. Draw a pistol off your hip and shoot START — the
- * tutorial IS the menu interaction.
+ * TITLE: the banner hangs in the air, a "how to play" plate sits over the
+ * two MODE cards — DEFENSE and DUEL. Point at one and pull the trigger.
  *
  * GAME OVER: your run's numbers on a plate (wave, kills, score), with AGAIN
  * and MENU cards under it. AGAIN drops you straight into wave 1.
@@ -106,7 +105,7 @@ export class MenuSystem extends createSystem({}) {
     this.shownFor = 'title';
     this.drawPlate('title');
     this.plate.visible = true;
-    // Two games, one verb: shoot the mode you want.
+    // Two games: point at the one you want.
     this.board.show(
       [
         {
@@ -127,7 +126,9 @@ export class MenuSystem extends createSystem({}) {
         },
       ],
       {
-        y: 1.15,
+        // Sits at a natural pointing height: a hand held level at chest
+        // height lands mid-card without you having to aim down at it.
+        y: 1.35,
         distance: 2.1,
         onPick: (id) => {
           app.mode = id as 'defense' | 'duel';
@@ -157,7 +158,7 @@ export class MenuSystem extends createSystem({}) {
         },
       ],
       {
-        y: 1.1,
+        y: 1.3,
         distance: 2.1,
         onPick: (id) => {
           if (id === 'again') this.startRun();
@@ -210,7 +211,7 @@ export class MenuSystem extends createSystem({}) {
       ctx.fillText('HOW TO PLAY', W / 2, 82);
       ctx.font = '700 40px system-ui, sans-serif';
       ctx.fillStyle = '#4d6b76';
-      ctx.fillText('PLACE THE JUICE TOWER — THE THIRST wants it drained', W / 2, 165);
+      ctx.fillText('POINT AND PULL THE TRIGGER to answer any menu', W / 2, 165);
       ctx.fillText('SQUEEZE GRIP at your hip — draw a pistol', W / 2, 230);
       ctx.fillText('PULL TRIGGER — one ball per press, make them count', W / 2, 295);
       ctx.fillText('RELEASE GRIP — throw the gun; a fresh one respawns', W / 2, 352);

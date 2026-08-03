@@ -48,21 +48,32 @@ export const PISTOL = {
   // `shotsPerTank` balls with NO auto-refill: when it runs dry you throw
   // the gun away and draw the fresh one off your hip — the throw IS the
   // reload, which is what makes the holster loop the ammo economy.
-  shotsPerTank: 14,
+  // Each ball is a REAL swig out of the tank — few, fat and consequential.
+  // You should watch the level drop shot to shot, not squint at it.
+  shotsPerTank: 9,
 
-  // The balls. Chunky juice orbs, Blaston-slow: MUCH slower than real
-  // projectiles but quick enough that you'd have to dodge one — this is the
-  // game's shared projectile language, so enemy return fire reads the same.
-  muzzleSpeed: 7.2, // launch speed (m/s) — snappier, still readable in flight
+  // The balls. Chunky juice orbs: much slower than real projectiles, but
+  // quick enough to have real snap — this is the game's shared projectile
+  // language, so enemy return fire reads the same.
+  muzzleSpeed: 8.8, // launch speed (m/s) — punchy, still readable in flight
   inheritVel: 0.55, // fraction of hand velocity added to the launch
-  spread: 0.018, // radians of random cone spread — a lob, not a laser
+  spread: 0.014, // radians of random cone spread — a lob, not a laser
   blobRadius: 0.052, // collision + visual radius — a big fat cricket ball
-  gravity: 2.0, // gentle arc so the balls still reach the spawn ring
-  lifetime: 3.0, // seconds of flight before a ball is culled
+  gravity: 1.7, // flatter arc: the extra speed reads as FLIGHT, not lob
+  lifetime: 2.6, // seconds of flight before a ball is culled
   damage: 40, // damage per landed ball (see ENEMY_TYPES for HP pools)
 
   // Feel.
   hapticEvery: 1, // a chunky ball deserves a thump per shot
+  fireHaptic: 0.85, // the shot itself: a proper punch
+  fireHapticMs: 42,
+  /**
+   * The DRY press. A spent gun must feel like NOTHING happening — no
+   * dribbled ball (which read as a sad second shot), and the faintest tick
+   * of a haptic. Empty should feel empty, not impotent.
+   */
+  dryHaptic: 0.05,
+  dryHapticMs: 10,
 
   // The slosh sim — a damped 2D pendulum tilting the liquid surface plane.
   slosh: {
@@ -255,7 +266,7 @@ export const DUEL = {
   // price list you do. Purchases show up on its deck so you can read them.
   aiIncomeBase: 1.7, // minerals per second before miners
   aiIncomePerMiner: 1.0,
-  aiShotsPerTank: 14, // shots its extractor banks per cycle
+  aiShotsPerTank: 9, // shots its extractor banks per cycle (mirrors your tank)
   aiShotCap: 28,
 };
 
@@ -528,9 +539,9 @@ export const UPGRADES = {
   cardGap: 0.13,
   cardDistance: 1.9, // metres in front of you
   cardHeightY: 1.45,
-  // Deliberately low: a card should fall to two or three balls. Picking an
-  // upgrade is a beat between waves, not a chore.
-  juiceToPick: 0.18, // fraction of a card you must cover to choose it (~3 balls)
+  /** How long a menu click locks out firing/placing, seconds — so the press
+   * that picks a card can't also squirt or plant the instant it resolves. */
+  clickGuard: 0.3,
 };
 
 /** Orbital juice globes — the vampire-survivors passive. */

@@ -178,8 +178,11 @@ export class SplatPool {
     // the puddles as you move your head — cheap, and very "wet floor".
     const mat = new MeshStandardMaterial({
       map: splatTexture(),
-      roughness: 0.12,
+      // Near-mirror: puddles should throw the room's light back at you as
+      // you move your head — that streak is what makes a floor read WET.
+      roughness: 0.035,
       metalness: 0,
+      envMapIntensity: 1.6,
       transparent: true,
       depthWrite: false,
       polygonOffset: true,
@@ -322,11 +325,14 @@ class DropletPool {
         void main(){ if(vLife<=0.0) discard;
           vec2 d = gl_PointCoord - 0.5; float r = length(d);
           if(r>0.5) discard;
-          // Hard round droplet with a wet catchlight up-left — thick
-          // glossy juice, not glowing spray.
+          // Hard round droplet with a wet catchlight up-left plus a tight
+          // hot pin inside it, and a bright rim where the surface turns
+          // away — thick glossy juice, not glowing spray.
           float lit = 0.85 + 0.3 * max(0.0, -d.y * 2.0);
-          float spec = smoothstep(0.16, 0.0, length(d + vec2(0.14, -0.14))) * 0.9;
-          gl_FragColor = vec4(vColor * lit + spec, smoothstep(0.5, 0.42, r)); }
+          float spec = smoothstep(0.19, 0.0, length(d + vec2(0.14, -0.14))) * 1.15;
+          spec += smoothstep(0.07, 0.0, length(d + vec2(0.15, -0.15))) * 0.8;
+          float rim = smoothstep(0.34, 0.5, r) * 0.35;
+          gl_FragColor = vec4(vColor * lit + spec + rim, smoothstep(0.5, 0.42, r)); }
       `,
       transparent: true,
       blending: NormalBlending,

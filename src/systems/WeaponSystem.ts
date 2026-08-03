@@ -32,6 +32,7 @@ import { dropletBurst, stampSplat } from '../fx/juice.js';
 import { pulseHand } from '../input/haptics.js';
 import { heldAimQuat } from '../input/aim.js';
 import { claimTank } from '../game/duel.js';
+import { activeBoards, menuClick } from '../ui/cardBoard.js';
 import { run, UpgradeId } from '../game/run.js';
 import { app } from '../game/appState.js';
 import { build, sinks } from '../game/shop.js';
@@ -272,37 +273,44 @@ export class WeaponSystem extends createSystem({
     this.firingWas[hand] = firing;
     rig.setTriggerPull(Math.max(pull, pressed ? 1 : 0));
 
-    // While the tower's or a turret's ghost is out, the trigger is the
-    // PLACE button — don't also squirt juice over the spot you're choosing.
-    if (app.phase === 'placing' || build.placing) return;
+    // While a menu is up the trigger CLICKS, and while a ghost is out it
+    // PLACES — either way it must not also squirt juice. The click guard
+    // covers the frames right after a menu resolves.
+    if (app.phase === 'placing' || build.placing || activeBoards.size > 0 || menuClick.cooldown > 0) {
+      return;
+    }
 
     let ammo = e.getValue(WaterPistol, 'ammo') ?? 1;
     // BIG TANKS levels stretch every tank without touching the visuals —
     // the same full reservoir just holds more shots.
     const drain = 1 / (PISTOL.shotsPerTank + sinks.tanks * SINK_TANK_BALLS_PER_LEVEL);
+    // Anything under half a swig is empty: float dust in the tank must not
+    // buy a token last squirt that reads as a second, feeble shot.
+    const hasShot = ammo >= drain * 0.5;
     const autoStacks = run.stacks[UpgradeId.AutoFire];
 
     // --- SEMI-AUTO: exactly one ball per trigger press, instantly. ---
     if (firingDown) {
-      if (ammo > 0) {
+      if (hasShot) {
         ammo = Math.max(0, ammo - drain);
         this.fireBlob(e, rig, hand, Math.max(pull, 0.5), motion.vel, 1);
         sfx.squirtShot();
         this.clicked[hand] = false;
       } else if (!this.clicked[hand]) {
-        // Dry press: one sad dribble, then plastic clicks. NO auto-refill —
-        // throwing the spent gun and drawing fresh IS the reload.
-        this.fireBlob(e, rig, hand, 0.2, motion.vel, 0.3);
+        // DRY: nothing comes out. No dribbled ball, barely any haptic — a
+        // spent gun should feel like empty plastic, not a weak shot. NO
+        // auto-refill: throwing it and drawing fresh IS the reload.
+        ammo = 0;
         sfx.emptyClick();
-        pulseHand(this.world.session, HANDS[hand], 0.15, 30);
+        pulseHand(this.world.session, HANDS[hand], PISTOL.dryHaptic, PISTOL.dryHapticMs);
         this.clicked[hand] = true;
       }
       e.setValue(WaterPistol, 'emit', 0);
-    } else if (firing && autoStacks > 0 && ammo > 0) {
+    } else if (firing && autoStacks > 0 && hasShot) {
       // --- AUTO SOAKER: hold to fire; stacks crank the cadence. ---
       const rate = AUTO.rate * Math.pow(AUTO.ratePerStack, autoStacks - 1);
       let emit = (e.getValue(WaterPistol, 'emit') ?? 0) + rate * delta;
-      while (emit >= 1 && ammo > 0) {
+      while (emit >= 1 && ammo >= drain * 0.5) {
         emit -= 1;
         ammo = Math.max(0, ammo - drain);
         this.fireBlob(e, rig, hand, Math.max(pull, 0.5), motion.vel, 1);
@@ -320,7 +328,7 @@ export class WeaponSystem extends createSystem({
       this.stopSquirt(hand);
     }
     if (!firing) this.clicked[hand] = false;
-    if (!(firing && autoStacks > 0 && ammo > 0)) this.stopSquirt(hand);
+    if (!(firing && autoStacks > 0 && ammo >= drain * 0.5)) this.stopSquirt(hand);
 
     e.setValue(WaterPistol, 'ammo', ammo);
   }
@@ -485,7 +493,9 @@ export class WeaponSystem extends createSystem({
     const ticks = (e.getValue(WaterPistol, 'ticks') ?? 0) + 1;
     if (ticks >= PISTOL.hapticEvery) {
       e.setValue(WaterPistol, 'ticks', 0);
-      pulseHand(this.world.session, HANDS[hand], 0.4 + 0.25 * pull, 32);
+      // A fat ball leaving the barrel should PUNCH — the contrast with the
+      // near-silent dry press is what sells "loaded" versus "spent".
+      pulseHand(this.world.session, HANDS[hand], PISTOL.fireHaptic * (0.8 + 0.2 * pull), PISTOL.fireHapticMs);
     } else {
       e.setValue(WaterPistol, 'ticks', ticks);
     }

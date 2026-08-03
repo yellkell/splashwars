@@ -194,9 +194,13 @@ export function enemyPop(): void {
   noiseBurst(700, 0.9, 0.5, 0.3, 200);
 }
 
-/** The dry-tank click: toy plastic snapping on nothing. */
+/**
+ * The dry-tank click: a small, DEAD tick of empty plastic. Quiet and
+ * toneless on purpose — a spent gun shouldn't announce itself, it should
+ * just fail to do anything.
+ */
 export function emptyClick(): void {
-  blip(2600, 1400, 0.03, 0.16, 'square');
+  noiseBurst(1500, 3.2, 0.022, 0.045, 900);
 }
 
 /** Drawing a pistol from the hip — a quick sporty schwip-click. */

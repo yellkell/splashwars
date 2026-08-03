@@ -16,16 +16,17 @@ splats on your real floor and as glossy creeping coverage over their white
 shells — your colour claiming their kit — and a fully juiced machine
 bursts. Every attack is TELEGRAPHED: a machine rears
 back, crouches, and SNAPS at the tower — the hit lands exactly at the
-snap, and bursting it mid-windup cancels the attack. Juice balls fly
-Blaston-slow — quick enough that you'd have to dodge one — and enemy
-return fire speaks the same language.
+snap, and bursting it mid-windup cancels the attack. Juice balls fly fat
+and quick — with real snap, but slow enough that you'd have to dodge one —
+and enemy return fire speaks the same language.
 
 The hero piece is the **tank**: every pistol has a frosted blow-moulded tank
 on top and you can SEE the juice sloshing inside — a Half-Life: Alyx-style liquid whose
 surface stays level as you tilt the gun, surges when you swing it, ripples
 when you jolt it. That liquid **is** the ammo, one unified system: fire and
-the level visibly drains; run dry and you get a sad dribble and plastic
-clicks. **There is no refill** — a tank is a magazine, and **throwing the
+the level visibly drains; run dry and the trigger does NOTHING but tick —
+no dribbled ball, barely a whisper of haptic, because empty should feel
+empty rather than feeble. **There is no refill** — a tank is a magazine, and **throwing the
 spent gun away is the reload**, because a fresh full one respawns on your
 hip. The tower reads the same way: its health is the JUICE LEVEL standing
 in its frosted reservoir, and every hit from THE THIRST visibly drains it —
@@ -60,20 +61,26 @@ no models, no textures, no sounds shipped.
   trick): spring-damper slosh driven by real hand acceleration, ripple
   energy, meniscus foam, and a **frosted** blow-moulded shell over fully
   opaque juice, so the liquid reads as a solid volume rather than a glass
-  box. Fill level = ammo; a held trigger drains the tank in ~2.6 s and it
+  box. Fill level = ammo; nine shots empty it and it
   does not come back on its own.
 - **Semi-auto, then AUTO SOAKER** — one ball per trigger press, landing on
-  the frame you pull; the tank is a 14-ball magazine. The AUTO SOAKER
+  the frame you pull, with a proper punch of haptic behind it. The tank is
+  a **9-ball magazine**: every shot is a real swig you can watch leave the
+  glass, so a full gun is a decision rather than a spray. The AUTO SOAKER
   upgrade unlocks hold-to-fire and each stack cranks the cadence 35%.
-  Balls fly at Blaston speeds — slow enough to watch, fast enough to have
-  to dodge — and enemy return fire speaks the same language.
+  Balls fly fat and fast enough to have real snap on a flat-ish arc — you
+  still have to dodge them — and enemy return fire speaks the same
+  language.
 - **Damage numbers** — white digits with thick black outlines popping off
   every hit (bigger and gold for blasts), drawn from one instanced digit
   atlas so hundreds of hit markers cost a single draw call.
-- **Gloss everywhere** — juice is WET: Blinn-Phong glints on the tank
-  liquid and on enemy coverage, near-zero-roughness clearcoat on balls and
-  orbiter globes, lit low-roughness floor splats that catch the scene's
-  lights, and a baked wet highlight in every splat and card splodge.
+- **Gloss everywhere** — juice is WET, and pushed as far as the renderer
+  goes: two-lobe speculars (a broad sheen under a tight hot pin) plus a
+  fresnel skin on the tank liquid and on enemy juice coverage,
+  mirror-smooth clearcoat with cranked environment reflections on balls
+  and orbiter globes, near-mirror floor splats that streak the room's
+  light back at you as you move your head, and droplets carrying a
+  catchlight, an inner pin and a bright rim.
 - **A swarm built for thousands** — one InstancedMesh per enemy kind, all
   sharing a single shader; juice coverage is per-instance (noise-masked,
   dripping top-down, with a hot wet glint), so a thousand individually
@@ -169,15 +176,22 @@ no models, no textures, no sounds shipped.
   its shell before it soaks you — losing a duel is called getting
   SLIMED, and the plate says so. The watch banks MINERALS, Y opens the
   duel shop, and its lobs are the same dodgeable juice yours are.
-- **Menus you shoot** — the game has exactly one interaction verb. The
-  title screen is a HOW TO PLAY plate over two mode cards — DEFENSE and
-  DUEL: draw and shoot the game you want. Losing brings a WIPED OUT / TOWER DRAINED plate (wave / pops
-  / score) with AGAIN and MENU cards. Between waves, three upgrade cards swing up and you
-  **hose the one you want** — about three balls, well under a second. Heavy
-  Juice (damage), Orbiters (vampire-survivors globes that grind anything
-  they touch), Buoyancy (max health + full heal), Juice Bomb (thrown
-  pistols detonate), Burst (balls burst with AOE) — all stacking. All of
-  it is one shared shoot-to-pick CardBoard primitive (ui/cardBoard.ts).
+- **Menus you point at** — whenever a board is up, a slim beam leaves
+  your hand down the same aim axis the barrel uses, a cursor lands on the
+  card under it, and the trigger clicks. Hovered cards brighten and lift
+  toward you; ones you can't afford go red under the cursor and shake off
+  a click. Menus used to be picked by HOSING them with juice, which cost
+  you half a tank per choice and made you draw a gun to answer a dialog —
+  a cursor answers instantly and costs nothing. The title screen is a HOW
+  TO PLAY plate over two mode cards (DEFENSE / DUEL); losing brings a
+  WIPED OUT / TOWER DRAINED / YOU GOT SLIMED plate with AGAIN and MENU.
+  Between waves, three upgrade cards swing up: Heavy Juice (damage),
+  Orbiters (vampire-survivors globes that grind anything they touch),
+  Buoyancy (max health + full heal), Juice Bomb (thrown pistols
+  detonate), Burst (balls burst with AOE) — all stacking. All of it is
+  one shared CardBoard primitive (ui/cardBoard.ts) driven by
+  PointerSystem, and one trigger press does exactly one thing: a click
+  that picks a card can't also squirt juice or slam down a ghost.
 - **The floor comes back** — clearing a wave sends an aqua ring sweeping
   out from the tower that slurps every floor splat it passes (with a long
   rising slurp to match), so each wave starts on a clean arena and the
@@ -233,7 +247,7 @@ src/
   arena/                  static set-dressing: deck, lighting, title banner
   components/             ECS data: WaterPistol
   game/appState.ts        title -> playing -> gameover flow
-  ui/cardBoard.ts         the ONE menu primitive: shoot-to-pick cards
+  ui/cardBoard.ts         the ONE menu primitive: point-and-click cards
   game/shop.ts            the bank (DROPS), placed turrets, build state
   systems/                WeaponSystem (draw/fire/drain/throw/slosh),
                           JuiceSystem (ball flight, hits, bursts, splats),

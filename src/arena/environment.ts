@@ -30,6 +30,8 @@ export function setupEnvironment(world: World): void {
     sky: rgba(0xbfe9f5),
     equator: rgba(0xffffff),
     ground: rgba(0xffe9c4),
-    intensity: 1.15,
+    // Cranked: every glossy surface reflects this gradient, so raising it
+    // is what makes the juice read WET rather than merely bright.
+    intensity: 1.45,
   });
 }

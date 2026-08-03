@@ -6,7 +6,7 @@
  * always there, so the economy is always one glance away — no floating HUD.
  *
  * THE SHOP: press Y (the button on your watch wrist) any time mid-battle
- * and the shop board flips up — the same shoot-to-pick cards as everything
+ * and the shop board flips up — the same point-and-click cards as everything
  * else. Top row: turrets and the WALL piece (which snaps to the floor grid
  * and reroutes THE THIRST — see game/field.ts). Bottom row: STAT SINKS — POWER,
  * BIG TANKS and RESERVOIR levels you can buy again and again, each level
@@ -51,7 +51,7 @@ import {
   TorusGeometry,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { CardBoard } from '../ui/cardBoard.js';
+import { CardBoard, menuClick } from '../ui/cardBoard.js';
 import { crispTexture, logicalCanvas } from '../ui/crispCanvas.js';
 import { placementSpot } from '../input/pointRay.js';
 import { addWall, canPlaceWall, cellCentre, cellOf, clearWalls, wallCount } from '../game/field.js';
@@ -431,7 +431,8 @@ export class TurretSystem extends createSystem({}) {
       const pressed = gp?.getButtonPressed(InputComponent.Trigger) ?? false;
       const down = pressed && !this.triggerWas[hand];
       this.triggerWas[hand] = pressed;
-      if (down) {
+      // The press that BOUGHT this ghost must not also plant it.
+      if (down && menuClick.cooldown <= 0) {
         this.placeTurret(kind, _spot);
         return;
       }
@@ -479,7 +480,7 @@ export class TurretSystem extends createSystem({}) {
       const pressed = gp?.getButtonPressed(InputComponent.Trigger) ?? false;
       const down = pressed && !this.triggerWas[hand];
       this.triggerWas[hand] = pressed;
-      if (!down) continue;
+      if (!down || menuClick.cooldown > 0) continue;
       if (!this.wallCellOk) {
         sfx.denied();
         return;

@@ -22,6 +22,7 @@ import { MenuSystem } from './systems/MenuSystem.js';
 import { TowerSystem } from './systems/TowerSystem.js';
 import { TurretSystem } from './systems/TurretSystem.js';
 import { DuelSystem } from './systems/DuelSystem.js';
+import { PointerSystem } from './systems/PointerSystem.js';
 import { run } from './game/run.js';
 import { app } from './game/appState.js';
 import { tower as towerState } from './game/tower.js';
@@ -30,6 +31,7 @@ import { WaterPistol } from './components/WaterPistol.js';
 import { debugLiveDigits, debugNumbersInstance, popDamage } from './fx/damageNumbers.js';
 import { stampSplat as debugStampSplat, wipeFloor as debugWipeFloor } from './fx/juice.js';
 import { flowAt as debugFlowAt, portal as debugPortal } from './game/field.js';
+import { activeBoards as debugActiveBoards, menuClick as debugMenuClick } from './ui/cardBoard.js';
 import { Quaternion as DebugQuat, Vector3 as DebugVec3 } from 'three';
 import { heldAimQuat } from './input/aim.js';
 
@@ -70,6 +72,9 @@ World.create(container, {
   world.registerSystem(TowerSystem);
   world.registerSystem(TurretSystem);
   world.registerSystem(DuelSystem);
+  // After every system that can RAISE a board, before the weapon — so the
+  // pointer sees fresh boards and its click guard reaches the trigger.
+  world.registerSystem(PointerSystem);
   world.registerSystem(WeaponSystem);
   world.registerSystem(JuiceSystem);
   world.registerSystem(PlayerSystem);
@@ -95,6 +100,31 @@ World.create(container, {
         return -1;
       },
       digits: () => debugLiveDigits(),
+      /** Menu pointer state: what's open, what's hovered, click lockout. */
+      menu: () => ({
+        boards: debugActiveBoards.size,
+        hovered: [...debugActiveBoards].map((b) => b.hovered),
+        guard: +debugMenuClick.cooldown.toFixed(2),
+      }),
+      /** Fire an arbitrary ray at the open boards — the pointer's own maths. */
+      menuRay: (ox = 0, oy = 1.5, oz = 0, dx = 0, dy = -0.15, dz = -1) => {
+        const o = new DebugVec3(ox, oy, oz);
+        const d = new DebugVec3(dx, dy, dz).normalize();
+        const p = new DebugVec3();
+        return [...debugActiveBoards].map((b) => {
+          const hit = b.hitTest(o, d, p);
+          return hit ? { index: hit.index, dist: +hit.distance.toFixed(2) } : null;
+        });
+      },
+      /** Hover a card by index and click it — exercises the pick + guard. */
+      menuPick: (index = 0) => {
+        const board = [...debugActiveBoards][0];
+        if (!board) return 'no board';
+        board.setHover(index);
+        const ok = board.activateHover();
+        debugMenuClick.cooldown = 0.3;
+        return ok ? 'picked' : 'denied';
+      },
       startGame: () => world.getSystem(MenuSystem)?.startRun(),
       startDuel: () => {
         app.mode = 'duel';
