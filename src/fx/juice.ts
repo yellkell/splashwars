@@ -158,6 +158,12 @@ function splatTexture(): CanvasTexture {
 const WIPE_SPEED = 2.6;
 /** Seconds for one splat to shrink away once the ring passes it. */
 const WIPE_SHRINK = 0.35;
+/**
+ * Paint is NOT sticky: every splat evaporates on its own after this many
+ * seconds (same shrink animation the wipe uses). The floor shows where the
+ * fight is happening, not where it has ever been.
+ */
+const SPLAT_LIFE = 4.5;
 
 /** Flat juice stamps on the floor/deck; a ring buffer so old juice recycles. */
 export class SplatPool {
@@ -169,6 +175,7 @@ export class SplatPool {
   private readonly pz = new Float32Array(MAX_SPLATS);
   private readonly yaw = new Float32Array(MAX_SPLATS);
   private readonly siz = new Float32Array(MAX_SPLATS); // 0 = empty slot
+  private readonly age = new Float32Array(MAX_SPLATS);
   private readonly shrink = new Float32Array(MAX_SPLATS).fill(-1); // <0 = not shrinking
   // THE WIPE: between waves an aqua ring sweeps out from the tower and
   // every splat it passes is slurped away — the floor comes back clean.
@@ -217,6 +224,7 @@ export class SplatPool {
     this.pz[i] = pos.z;
     this.yaw[i] = Math.random() * Math.PI * 2;
     this.siz[i] = size * (0.8 + Math.random() * 0.5);
+    this.age[i] = 0;
     this.shrink[i] = -1;
     this.compose(i, 1);
     this.mesh.instanceMatrix.needsUpdate = true;
@@ -249,17 +257,24 @@ export class SplatPool {
     for (let i = 0; i < MAX_SPLATS; i++) {
       if (this.siz[i] <= 0) continue;
       if (this.shrink[i] < 0) {
-        if (!this.wipeActive) continue;
-        const dx = this.px[i] - this.wipeX;
-        const dz = this.pz[i] - this.wipeZ;
-        if (dx * dx + dz * dz > this.wipeR * this.wipeR) continue;
-        // The ring just reached this splat: start its shrink, flick a few
-        // droplets up off it so the clean-up reads as the juice LEAVING.
-        this.shrink[i] = 0;
-        if (sparkles > 0) {
-          sparkles--;
-          dropletBurst(_dummy.position.set(this.px[i], 0.02, this.pz[i]), 4, 0.7);
+        // Old paint evaporates on its own — splats aren't sticky.
+        this.age[i] += dt;
+        let start = this.age[i] >= SPLAT_LIFE;
+        if (!start && this.wipeActive) {
+          const dx = this.px[i] - this.wipeX;
+          const dz = this.pz[i] - this.wipeZ;
+          if (dx * dx + dz * dz <= this.wipeR * this.wipeR) {
+            // The ring just reached this splat: flick a few droplets up off
+            // it so the clean-up reads as the juice LEAVING.
+            start = true;
+            if (sparkles > 0) {
+              sparkles--;
+              dropletBurst(_dummy.position.set(this.px[i], 0.02, this.pz[i]), 4, 0.7);
+            }
+          }
         }
+        if (!start) continue;
+        this.shrink[i] = 0;
       }
       this.shrink[i] += dt / WIPE_SHRINK;
       const k = 1 - this.shrink[i];

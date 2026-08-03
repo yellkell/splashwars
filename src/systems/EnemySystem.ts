@@ -38,7 +38,7 @@ import { Swarm } from '../enemies/swarm.js';
 import { dropletBurst, initJuicePools, wipeFloor } from '../fx/juice.js';
 import { initDamageNumbers, popDamage } from '../fx/damageNumbers.js';
 import { enemyShot, pendingBlasts, recycleBlast } from '../combat/juiceBus.js';
-import { run } from '../game/run.js';
+import { damagePlayer, run } from '../game/run.js';
 import { damageTower, tower } from '../game/tower.js';
 import { app } from '../game/appState.js';
 import { addDrops, placedTurrets } from '../game/shop.js';
@@ -243,8 +243,12 @@ export class EnemySystem extends createSystem({}) {
     // The sign gently faces the player in every phase.
     this.sign.lookAt(_head);
 
-    // The portal stands past the tower, facing it, drink swirling.
-    const showPortal = tower.placed && (app.phase === 'playing' || app.phase === 'gameover');
+    const campaignFight = app.mode === 'campaign' && this.campaignEncounter !== null;
+
+    // The portal stands past the tower — or past YOU, in a campaign route
+    // where the machines come straight for the player — drink swirling.
+    const showPortal =
+      (tower.placed || campaignFight) && (app.phase === 'playing' || app.phase === 'gameover');
     this.portalGroup.visible = showPortal;
     if (showPortal) {
       this.portalGroup.position.copy(portal);
@@ -259,7 +263,6 @@ export class EnemySystem extends createSystem({}) {
     // Outside a run — or outside DEFENSE mode entirely (the duel has no
     // waves) — there is nothing to direct. The sign stays shared: the duel
     // borrows setSign() for its own announcements.
-    const campaignFight = app.mode === 'campaign' && this.campaignEncounter !== null;
     if (app.phase !== 'playing' || (app.mode !== 'defense' && !campaignFight)) {
       pendingBlasts.length = 0;
       return;
@@ -304,10 +307,11 @@ export class EnemySystem extends createSystem({}) {
       recycleBlast(blast);
     }
 
-    // --- Drive every live enemy. Everything wants the TOWER. ---
+    // --- Drive every live enemy. In DEFENSE everything wants the TOWER;
+    // on a campaign route there is no tower — they come straight FOR YOU. ---
     swarm.rebuildGrid();
-    const tx = tower.pos.x;
-    const tz = tower.pos.z;
+    const tx = campaignFight ? _head.x : tower.pos.x;
+    const tz = campaignFight ? _head.z : tower.pos.z;
 
     for (let i = 0; i < swarm.px.length; i++) {
       if (!swarm.alive[i]) continue;
@@ -342,7 +346,7 @@ export class EnemySystem extends createSystem({}) {
           mx = -dx / dist;
           mz = -dz / dist;
         }
-      } else if (!boss && flowAt(swarm.px[i], swarm.pz[i], _flow)) {
+      } else if (!boss && !campaignFight && flowAt(swarm.px[i], swarm.pz[i], _flow)) {
         mx = _flow.x;
         mz = _flow.z;
       } else {
@@ -352,10 +356,11 @@ export class EnemySystem extends createSystem({}) {
       // Yaw so the machine faces where it's actually going.
       swarm.facing[i] = Math.atan2(-mx, -mz);
 
-      // Ranged types stop further out; melee press right up to the tower.
+      // Ranged types stop further out; melee press right up to the mark —
+      // the tower's skirt, or arm's reach of YOU on a campaign route.
       const standoff = def.ranged
         ? 2.2 + (kind === EnemyKind.Boss ? 1.4 : 0)
-        : TOWER.radius + swarm.radius[i] + 0.12;
+        : (campaignFight ? 0.55 : TOWER.radius + 0.12) + swarm.radius[i];
       let speed = WAVES.baseSpeed * swarm.speed[i] * (1 + (run.wave - 1) * 0.06);
 
       // --- Movement personality: each toy travels like what it is. ---
@@ -475,7 +480,8 @@ export class EnemySystem extends createSystem({}) {
           if (def.ranged) {
             this.fireLob(i);
           } else if (dist <= standoff + swarm.radius[i] * 1.6) {
-            this.strikeTower(def.attack, i);
+            if (campaignFight) this.strikePlayer(def.attack, i);
+            else this.strikeTower(def.attack, i);
           }
         }
       } else if (!fleeing && swarm.arrive[i] <= 0) {
@@ -577,7 +583,9 @@ export class EnemySystem extends createSystem({}) {
    */
   private fireLob(i: number): void {
     const swarm = this.swarm;
-    if (Math.random() < 0.35) this.world.camera.getWorldPosition(_head);
+    const atPlayer =
+      (app.mode === 'campaign' && this.campaignEncounter !== null) || Math.random() < 0.35;
+    if (atPlayer) this.world.camera.getWorldPosition(_head);
     else _head.set(tower.pos.x, 0.85, tower.pos.z);
     _pos.set(swarm.px[i], swarm.py[i], swarm.pz[i]);
     _shotVel.copy(_head).sub(_pos);
@@ -591,6 +599,17 @@ export class EnemySystem extends createSystem({}) {
     _shotVel.z += (Math.random() - 0.5) * 0.6;
     enemyShot(_pos, _shotVel);
     sfx.enemyLob();
+  }
+
+  /** A campaign machine's snap landing on YOU — droplets right in your face. */
+  private strikePlayer(amount: number, i: number): void {
+    const swarm = this.swarm;
+    this.world.camera.getWorldPosition(_pos);
+    _pos.x += (swarm.px[i] - _pos.x) * 0.4;
+    _pos.z += (swarm.pz[i] - _pos.z) * 0.4;
+    dropletBurst(_pos, 6, 0.9);
+    if (damagePlayer(amount)) sfx.playerDown();
+    else sfx.playerHurt();
   }
 
   /** A machine's snap landing on the tower. Sippers DRINK and bolt. */

@@ -12,12 +12,15 @@ import { createSystem, Vector3 } from '@iwsdk/core';
 import {
   CanvasTexture,
   CircleGeometry,
+  CylinderGeometry,
   Group,
   Mesh,
   MeshBasicMaterial,
   PlaneGeometry,
   RingGeometry,
+  TorusGeometry,
 } from 'three';
+import { glossyPlastic, mattePlastic } from '../materials/plastic.js';
 import { CampaignMap } from '../ui/campaignMap.js';
 import {
   CAMPAIGN_NODES,
@@ -47,14 +50,14 @@ import { ATTACKS, type AttackName } from '../goopliath/goopConfig.js';
 import { GooFx } from '../goopliath/splats.js';
 import { app } from '../game/appState.js';
 import { resetRunWithStacks, run, damagePlayer } from '../game/run.js';
-import { resetTower, tower } from '../game/tower.js';
+import { tower } from '../game/tower.js';
 import { resetBank } from '../game/shop.js';
 import { addBallTarget, clearBallTargets, removeBallTarget, type BallTarget } from '../combat/targets.js';
 import { enemyShot } from '../combat/juiceBus.js';
 import { dropletBurst } from '../fx/juice.js';
 import { popDamage } from '../fx/damageNumbers.js';
 import { crispTexture, logicalCanvas } from '../ui/crispCanvas.js';
-import { CAMPAIGN, ENEMY_SHOT, PISTOL } from '../config.js';
+import { CAMPAIGN, ENEMY_SHOT, PALETTE, PISTOL } from '../config.js';
 import { EnemySystem, upgradeGate } from './EnemySystem.js';
 import { TurretSystem } from './TurretSystem.js';
 import { WeaponSystem } from './WeaponSystem.js';
@@ -145,6 +148,8 @@ export class CampaignSystem extends createSystem({}) {
 
   // Boss arena basis. +forward points from the player pad to GOOPLIATH.
   private arena = new Group();
+  /** Lane + boss pool + boss rim — shown only when GOOPLIATH is out. */
+  private bossDressing: Mesh[] = [];
   private arenaCenter = new Vector3();
   private bossPos = new Vector3();
   private forward = new Vector3(0, 0, -1);
@@ -334,12 +339,18 @@ export class CampaignSystem extends createSystem({}) {
     if (_forward.lengthSq() < 1e-4) _forward.set(0, 0, -1);
     _forward.normalize();
 
+    // No tower on a campaign route — THE THIRST comes straight for YOU.
+    // tower.pos survives only as the field/portal anchor ahead of you.
     tower.pos.copy(_head).addScaledVector(_forward, 1.7).setY(0);
-    tower.placed = true;
-    resetTower();
-    tower.maxHealth = spec.towerCapacity;
-    tower.health = spec.towerCapacity;
-    tower.hitFlash = 0;
+    tower.placed = false;
+
+    // The pad appears underfoot for every stop, boss dressing off.
+    this.arenaCenter.set(_head.x, 0, _head.z);
+    this.arenaYaw = Math.atan2(-_forward.x, -_forward.z);
+    this.arena.position.copy(this.arenaCenter);
+    this.arena.rotation.y = this.arenaYaw;
+    this.arena.visible = true;
+    for (const d of this.bossDressing) d.visible = false;
 
     this.phase = 'swarm';
     this.world.getSystem(EnemySystem)?.startCampaignEncounter(spec);
@@ -372,12 +383,34 @@ export class CampaignSystem extends createSystem({}) {
   // --- Boss construction ---------------------------------------------------
 
   private buildArena(): void {
+    // THE PAD — always under your feet on a campaign stop, FIRE FIGHT
+    // style: a solid glossy octagon slab sunk to floor level with a matte
+    // aqua skirt and rim tube. Solid on purpose: its top face rides above
+    // the splat decals, so paint can never bury the platform you stand on.
+    const slabGeo = new CylinderGeometry(CAMPAIGN.padRadius, CAMPAIGN.padRadius * 0.94, 0.09, 8);
+    slabGeo.rotateY(Math.PI / 8); // line the facets up with the glow octagon
+    const slab = new Mesh(slabGeo, glossyPlastic(PALETTE.deckWhite, 0.35));
+    slab.position.y = -0.022; // top face at y 0.023 — above every splat
+    this.arena.add(slab);
+    const skirtGeo = new CylinderGeometry(CAMPAIGN.padRadius * 0.94, CAMPAIGN.padRadius * 0.84, 0.08, 8);
+    skirtGeo.rotateY(Math.PI / 8);
+    const skirt = new Mesh(skirtGeo, mattePlastic(PALETTE.water));
+    skirt.position.y = -0.1;
+    this.arena.add(skirt);
+    const tube = new Mesh(
+      new TorusGeometry(CAMPAIGN.padRadius * 0.985, 0.035, 14, 48),
+      glossyPlastic(PALETTE.deckAqua, 0.22),
+    );
+    tube.rotation.x = Math.PI / 2;
+    tube.position.y = 0.023;
+    this.arena.add(tube);
+
     const floor = new Mesh(
       new CircleGeometry(CAMPAIGN.padRadius, 8, Math.PI / 8),
       new MeshBasicMaterial({ color: 0xe9fbff, transparent: true, opacity: 0.18, depthWrite: false }),
     );
     floor.rotation.x = -Math.PI / 2;
-    floor.position.y = 0.005;
+    floor.position.y = 0.028;
     this.arena.add(floor);
 
     this.arenaRimMat = new MeshBasicMaterial({ color: 0x48d9e8, transparent: true, opacity: 0.88, depthWrite: false });
@@ -386,7 +419,7 @@ export class CampaignSystem extends createSystem({}) {
       this.arenaRimMat,
     );
     rim.rotation.x = -Math.PI / 2;
-    rim.position.y = 0.012;
+    rim.position.y = 0.03;
     this.arena.add(rim);
 
     this.arenaLaneMat = new MeshBasicMaterial({ color: 0x8ce8ef, transparent: true, opacity: 0.16, depthWrite: false });
@@ -397,6 +430,7 @@ export class CampaignSystem extends createSystem({}) {
     lane.rotation.x = -Math.PI / 2;
     lane.position.set(0, 0.008, -CAMPAIGN.bossDistance / 2);
     this.arena.add(lane);
+    this.bossDressing.push(lane);
 
     this.bossPoolMat = new MeshBasicMaterial({ color: 0x3ee46b, transparent: true, opacity: 0.2, depthWrite: false });
     const bossPool = new Mesh(
@@ -406,6 +440,7 @@ export class CampaignSystem extends createSystem({}) {
     bossPool.rotation.x = -Math.PI / 2;
     bossPool.position.set(0, 0.008, -CAMPAIGN.bossDistance);
     this.arena.add(bossPool);
+    this.bossDressing.push(bossPool);
 
     this.bossRimMat = new MeshBasicMaterial({ color: 0x65ff87, transparent: true, opacity: 0.72, depthWrite: false });
     const bossRim = new Mesh(
@@ -415,6 +450,7 @@ export class CampaignSystem extends createSystem({}) {
     bossRim.rotation.x = -Math.PI / 2;
     bossRim.position.set(0, 0.014, -CAMPAIGN.bossDistance);
     this.arena.add(bossRim);
+    this.bossDressing.push(bossRim);
 
     this.arena.visible = false;
     this.world.scene.add(this.arena);
@@ -449,6 +485,7 @@ export class CampaignSystem extends createSystem({}) {
     this.arena.position.copy(this.arenaCenter);
     this.arena.rotation.y = this.arenaYaw;
     this.arena.visible = true;
+    for (const d of this.bossDressing) d.visible = true;
     const visual = bossForm(def.form);
     this.bossVisual = visual;
     this.arenaRimMat.color.set(visual.arenaColor);
